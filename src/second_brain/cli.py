@@ -22,6 +22,7 @@ from .database import Database
 from .pipeline import ProcessingPipeline
 from .embeddings import EmbeddingService
 from .context7_client import Context7Client
+from .mcp_server.server import SecondBrainMCPServer
 
 # Load environment variables
 load_dotenv()
@@ -428,6 +429,21 @@ def timeline(host: str, port: int, no_open: bool):
         asyncio.run(server.serve())
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down timeline server...[/yellow]")
+
+
+@main.command()
+def mcp_server():
+    """Start MCP server on port 3000 (stub)."""
+    console.print("[green]Starting MCP server (stub)...[/green]")
+    server = SecondBrainMCPServer(None)
+
+    async def run():
+        await server.run()
+
+    try:
+        asyncio.run(run())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Stopping MCP server...[/yellow]")
 
 
 @main.group()

@@ -13,9 +13,11 @@ DEFAULT_CONFIG = {
         "quality": 85,
         "max_disk_usage_gb": 100,
         "min_free_space_gb": 10,
+        "buffer_enabled": False,
+        "buffer_duration": 30,
     },
     "ocr": {
-        "engine": "openai",
+        "engine": "openai",  # openai | deepseek | hybrid
         "model": "gpt-5",
         "api_key_env": "OPENAI_API_KEY",
         "batch_size": 5,
@@ -23,6 +25,10 @@ DEFAULT_CONFIG = {
         "rate_limit_rpm": 50,
         "include_semantic_context": True,
         "timeout_seconds": 30,
+        # DeepSeek specific
+        "deepseek_docker": True,
+        "deepseek_docker_url": "http://localhost:8001",
+        "hybrid_ratio": 0.5,
     },
     "storage": {
         "retention_days": 90,

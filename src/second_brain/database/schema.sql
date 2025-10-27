@@ -26,6 +26,8 @@ CREATE TABLE IF NOT EXISTS text_blocks (
     bbox_width INTEGER,
     bbox_height INTEGER,
     block_type TEXT,
+    ocr_engine TEXT DEFAULT 'openai',
+    compression_ratio REAL,
     created_at INTEGER DEFAULT (strftime('%s', 'now')),
     FOREIGN KEY (frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
 );

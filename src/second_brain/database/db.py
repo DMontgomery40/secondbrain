@@ -158,26 +158,51 @@ class Database:
             Number of blocks inserted
         """
         cursor = self.conn.cursor()
-        cursor.executemany("""
-            INSERT INTO text_blocks (
-                block_id, frame_id, text, normalized_text, confidence,
-                bbox_x, bbox_y, bbox_width, bbox_height, block_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            (
+        # Detect optional columns
+        has_engine = any("ocr_engine" in b for b in text_blocks)
+        has_compression = any("compression_ratio" in b for b in text_blocks)
+
+        columns = [
+            "block_id",
+            "frame_id",
+            "text",
+            "normalized_text",
+            "confidence",
+            "bbox_x",
+            "bbox_y",
+            "bbox_width",
+            "bbox_height",
+            "block_type",
+        ]
+        if has_engine:
+            columns.append("ocr_engine")
+        if has_compression:
+            columns.append("compression_ratio")
+
+        placeholders = ", ".join(["?"] * len(columns))
+        sql = f"INSERT INTO text_blocks ({', '.join(columns)}) VALUES ({placeholders})"
+
+        def row(block: Dict[str, Any]):
+            bbox = block.get("bbox", {}) or {}
+            values: List[Any] = [
                 block["block_id"],
                 block["frame_id"],
                 block["text"],
                 block.get("normalized_text"),
                 block.get("confidence"),
-                block.get("bbox", {}).get("x"),
-                block.get("bbox", {}).get("y"),
-                block.get("bbox", {}).get("width"),
-                block.get("bbox", {}).get("height"),
+                bbox.get("x"),
+                bbox.get("y"),
+                bbox.get("width"),
+                bbox.get("height"),
                 block.get("block_type"),
-            )
-            for block in text_blocks
-        ])
+            ]
+            if has_engine:
+                values.append(block.get("ocr_engine"))
+            if has_compression:
+                values.append(block.get("compression_ratio"))
+            return tuple(values)
+
+        cursor.executemany(sql, [row(b) for b in text_blocks])
         self.conn.commit()
         
         count = len(text_blocks)
