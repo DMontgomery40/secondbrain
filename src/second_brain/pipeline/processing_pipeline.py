@@ -12,7 +12,7 @@ from ..capture.screenshot_buffer import ScreenshotBuffer
 from ..config import Config
 from ..database import Database
 from ..ocr import OpenAIOCR, DeepSeekOCR
-from ..embeddings import EmbeddingService
+# Lazy import EmbeddingService to avoid importing heavy deps unless enabled
 
 logger = structlog.get_logger()
 
@@ -42,7 +42,16 @@ class ProcessingPipeline:
             self.ocr_service = OpenAIOCR(self.config)
 
         self.database = Database(config=self.config)
-        self.embedding_service = EmbeddingService(self.config)
+        # Initialize embeddings lazily and only if enabled in config
+        self.embedding_service = None
+        if self.config.get("embeddings.enabled", True):
+            try:
+                from ..embeddings import EmbeddingService  # type: ignore
+                self.embedding_service = EmbeddingService(self.config)
+            except Exception as embed_init_err:
+                logger.warning(
+                    "embedding_service_init_failed", error=str(embed_init_err)
+                )
 
         # No screenshot buffering - keep it simple
         self.screenshot_buffer = None
@@ -140,14 +149,15 @@ class ProcessingPipeline:
                         if text_blocks:
                             self.database.insert_text_blocks(text_blocks)
                             # Index embeddings after successful DB write
-                            try:
-                                self.embedding_service.index_text_blocks(metadata, text_blocks)
-                            except Exception as embed_error:
-                                logger.error(
-                                    "embedding_index_failed",
-                                    frame_id=metadata["frame_id"],
-                                    error=str(embed_error),
-                                )
+                            if self.embedding_service:
+                                try:
+                                    self.embedding_service.index_text_blocks(metadata, text_blocks)
+                                except Exception as embed_error:
+                                    logger.error(
+                                        "embedding_index_failed",
+                                        frame_id=metadata["frame_id"],
+                                        error=str(embed_error),
+                                    )
                         
                         # Update window tracking
                         self.database.update_window_tracking(

@@ -144,6 +144,7 @@ def create_app() -> FastAPI:
     def get_system_stats(db: Database = Depends(get_db)):
         """Get system statistics for display in settings."""
         import psutil
+        import importlib
 
         # Get database stats
         db_stats = db.get_database_stats()
@@ -159,15 +160,12 @@ def create_app() -> FastAPI:
                     if item.suffix in ['.png', '.jpg', '.jpeg']:
                         screenshot_count += 1
 
-        # Check DeepSeek Docker health
-        deepseek_running = False
+        # Check DeepSeek MLX availability (importable)
         try:
-            import requests
-            deepseek_url = config.get("ocr.deepseek_docker_url", "http://localhost:8001")
-            resp = requests.get(f"{deepseek_url}/health", timeout=2)
-            deepseek_running = resp.status_code == 200
-        except:
-            pass
+            importlib.import_module("mlx_vlm")
+            deepseek_mlx_available = True
+        except Exception:
+            deepseek_mlx_available = False
 
         return {
             "database_size_mb": round(db_stats.get("database_size_bytes", 0) / (1024 * 1024), 2),
@@ -177,7 +175,7 @@ def create_app() -> FastAPI:
             "text_blocks": db_stats.get("text_block_count", 0),
             "memory_usage_percent": round(psutil.virtual_memory().percent, 1),
             "disk_free_gb": round(psutil.disk_usage(str(config.get_data_dir())).free / (1024 * 1024 * 1024), 2),
-            "deepseek_docker_running": deepseek_running,
+            "deepseek_mlx_available": deepseek_mlx_available,
         }
 
     @app.get("/api/settings/ocr-engine")
@@ -203,7 +201,7 @@ def create_app() -> FastAPI:
         return {"status": "ok", "engine": engine, "message": f"OCR engine switched to {engine}. Restart the capture service for changes to take effect."}
 
     ui_dist = (
-        Path(__file__).resolve().parents[2] / "web" / "timeline" / "dist"
+        Path(__file__).resolve().parents[3] / "web" / "timeline" / "dist"
     )
     if ui_dist.exists():
         app.mount(

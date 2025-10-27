@@ -22,18 +22,23 @@ interface Settings {
     buffer_enabled: boolean;
     buffer_duration: number;
     buffer_min_size: number;
-    deepseek_docker: boolean;
-    deepseek_docker_url: string;
+    // DeepSeek options (MLX backend only)
     deepseek_mode: string;
+    deepseek_model?: string; // MLX HF model id
+    mlx_max_tokens?: number;
+    mlx_temperature?: number;
   };
   storage: {
     retention_days: number;
     compression: boolean;
   };
   embeddings: {
-    model: string;
-    dimension: number;
     enabled: boolean;
+    provider: 'sbert' | 'openai';
+    model: string; // SBERT model
+    openai_model?: string; // OpenAI embedding model
+    reranker_enabled?: boolean;
+    reranker_model?: string;
   };
   context7: {
     api_key: string;
@@ -56,7 +61,6 @@ interface SystemStats {
   text_blocks: number;
   memory_usage_percent: number;
   disk_free_gb: number;
-  deepseek_docker_running: boolean;
 }
 
 interface SettingsPanelProps {
@@ -155,9 +159,6 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             <span>💾 {stats.database_size_mb}MB</span>
             <span>📸 {stats.screenshot_count} screenshots</span>
             <span>🖼️ {stats.frames_in_db} frames</span>
-            <span className={stats.deepseek_docker_running ? 'status-ok' : 'status-error'}>
-              🤖 DeepSeek {stats.deepseek_docker_running ? '✓' : '✗'}
-            </span>
             <span>💻 RAM {stats.memory_usage_percent}%</span>
             <span>💿 {stats.disk_free_gb}GB free</span>
           </div>
@@ -296,23 +297,29 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               {settings.ocr.engine === 'deepseek' && (
                 <>
                   <div className="setting-row">
-                    <label>
-                      <input
-                        type="checkbox"
-                        checked={settings.ocr.deepseek_docker}
-                        onChange={(e) => updateSetting('ocr', 'deepseek_docker', e.target.checked)}
-                      />
-                      Use Docker Service
-                    </label>
-                  </div>
-
-                  <div className="setting-row">
-                    <label>Docker URL</label>
+                    <label>MLX Model (HF Id)</label>
                     <input
                       type="text"
-                      value={settings.ocr.deepseek_docker_url}
-                      onChange={(e) => updateSetting('ocr', 'deepseek_docker_url', e.target.value)}
-                      placeholder="http://localhost:8001"
+                      value={settings.ocr.deepseek_model || 'mlx-community/DeepSeek-OCR-4bit'}
+                      onChange={(e) => updateSetting('ocr', 'deepseek_model', e.target.value)}
+                    />
+                    <span className="hint">Downloaded on first run</span>
+                  </div>
+                  <div className="setting-row">
+                    <label>MLX Max Tokens</label>
+                    <input
+                      type="number"
+                      value={settings.ocr.mlx_max_tokens || 1200}
+                      onChange={(e) => updateSetting('ocr', 'mlx_max_tokens', parseInt(e.target.value))}
+                    />
+                  </div>
+                  <div className="setting-row">
+                    <label>MLX Temperature</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.ocr.mlx_temperature ?? 0.0}
+                      onChange={(e) => updateSetting('ocr', 'mlx_temperature', parseFloat(e.target.value))}
                     />
                   </div>
 
@@ -447,27 +454,68 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
               </div>
 
               <div className="setting-row">
-                <label>Embedding Model</label>
+                <label>Provider</label>
                 <select
-                  value={settings.embeddings.model}
-                  onChange={(e) => updateSetting('embeddings', 'model', e.target.value)}
+                  value={settings.embeddings.provider || 'sbert'}
+                  onChange={(e) => updateSetting('embeddings', 'provider', e.target.value)}
                   disabled={!settings.embeddings.enabled}
                 >
-                  <option value="sentence-transformers/all-MiniLM-L6-v2">MiniLM (Fast, 384-dim)</option>
-                  <option value="sentence-transformers/all-mpnet-base-v2">MPNet (Accurate, 768-dim)</option>
+                  <option value="sbert">SentenceTransformers (local)</option>
+                  <option value="openai">OpenAI (API)</option>
                 </select>
               </div>
 
+              {(!settings.embeddings.provider || settings.embeddings.provider === 'sbert') && (
+                <div className="setting-row">
+                  <label>SBERT Model</label>
+                  <select
+                    value={settings.embeddings.model}
+                    onChange={(e) => updateSetting('embeddings', 'model', e.target.value)}
+                    disabled={!settings.embeddings.enabled}
+                  >
+                    <option value="sentence-transformers/all-MiniLM-L6-v2">MiniLM (Fast, 384-dim)</option>
+                    <option value="sentence-transformers/all-mpnet-base-v2">MPNet (Accurate, 768-dim)</option>
+                  </select>
+                </div>
+              )}
+
+              {settings.embeddings.provider === 'openai' && (
+                <div className="setting-row">
+                  <label>OpenAI Embedding Model</label>
+                  <select
+                    value={settings.embeddings.openai_model || 'text-embedding-3-small'}
+                    onChange={(e) => updateSetting('embeddings', 'openai_model', e.target.value)}
+                    disabled={!settings.embeddings.enabled}
+                  >
+                    <option value="text-embedding-3-small">text-embedding-3-small</option>
+                    <option value="text-embedding-3-large">text-embedding-3-large</option>
+                  </select>
+                </div>
+              )}
+
               <div className="setting-row">
-                <label>Dimension</label>
-                <input
-                  type="number"
-                  value={settings.embeddings.dimension}
-                  readOnly
-                  className="readonly"
-                />
-                <span className="hint">Vector dimension (determined by model)</span>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={!!settings.embeddings.reranker_enabled}
+                    onChange={(e) => updateSetting('embeddings', 'reranker_enabled', e.target.checked)}
+                    disabled={!settings.embeddings.enabled}
+                  />
+                  Enable BAAI/bge Reranker
+                </label>
               </div>
+
+              {settings.embeddings.reranker_enabled && (
+                <div className="setting-row">
+                  <label>Reranker Model</label>
+                  <input
+                    type="text"
+                    value={settings.embeddings.reranker_model || 'BAAI/bge-reranker-large'}
+                    onChange={(e) => updateSetting('embeddings', 'reranker_model', e.target.value)}
+                    disabled={!settings.embeddings.enabled}
+                  />
+                </div>
+              )}
 
               <button className="reset-btn" onClick={() => resetCategory('embeddings')}>Reset to Defaults</button>
             </div>

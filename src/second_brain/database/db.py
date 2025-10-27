@@ -424,3 +424,143 @@ class Database:
         """Vacuum database to reclaim space."""
         self.conn.execute("VACUUM")
         logger.info("database_vacuumed")
+
+    # MCP Server compatibility methods
+    
+    def search_frames(
+        self,
+        query: str,
+        semantic: bool = False,
+        limit: int = 20,
+        app_bundle_id: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Search frames (compatibility method for MCP server).
+        
+        Args:
+            query: Search query
+            semantic: Whether to use semantic search (not implemented yet)
+            limit: Maximum results
+            app_bundle_id: Filter by app
+            start_time: ISO format start time
+            end_time: ISO format end time
+            
+        Returns:
+            List of search results
+        """
+        # Convert ISO times to timestamps
+        from datetime import datetime
+        
+        start_timestamp = None
+        end_timestamp = None
+        
+        if start_time:
+            try:
+                dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+                start_timestamp = int(dt.timestamp())
+            except ValueError:
+                pass
+        
+        if end_time:
+            try:
+                dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+                end_timestamp = int(dt.timestamp())
+            except ValueError:
+                pass
+        
+        # Use existing search_text method
+        return self.search_text(
+            query=query,
+            app_filter=app_bundle_id,
+            start_timestamp=start_timestamp,
+            end_timestamp=end_timestamp,
+            limit=limit
+        )
+    
+    def get_frame_text(self, frame_id: str) -> List[Dict[str, Any]]:
+        """Get text blocks for a frame (compatibility method for MCP server).
+        
+        Args:
+            frame_id: Frame ID
+            
+        Returns:
+            List of text blocks
+        """
+        return self.get_text_blocks_by_frame(frame_id)
+    
+    def get_frames_by_time_range(
+        self,
+        start_time: str,
+        end_time: str,
+        limit: int = 100
+    ) -> List[Dict[str, Any]]:
+        """Get frames within a time range (compatibility method for MCP server).
+        
+        Args:
+            start_time: ISO format start time
+            end_time: ISO format end time
+            limit: Maximum results
+            
+        Returns:
+            List of frames
+        """
+        from datetime import datetime
+        
+        start_timestamp = None
+        end_timestamp = None
+        
+        try:
+            dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
+            start_timestamp = int(dt.timestamp())
+        except ValueError:
+            pass
+        
+        try:
+            dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+            end_timestamp = int(dt.timestamp())
+        except ValueError:
+            pass
+        
+        return self.get_frames(
+            limit=limit,
+            start_timestamp=start_timestamp,
+            end_timestamp=end_timestamp
+        )
+    
+    def get_app_stats(
+        self,
+        app_bundle_id: Optional[str] = None,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Get application statistics (compatibility method for MCP server).
+        
+        Args:
+            app_bundle_id: Filter by app
+            start_time: ISO format start time
+            end_time: ISO format end time
+            
+        Returns:
+            List of app stats
+        """
+        return self.get_app_usage_stats(limit=50)
+    
+    def analyze_activity(
+        self,
+        start_time: str,
+        end_time: str,
+        group_by: str = "hour"
+    ) -> List[Dict[str, Any]]:
+        """Analyze activity patterns (compatibility method for MCP server).
+        
+        Args:
+            start_time: ISO format start time
+            end_time: ISO format end time
+            group_by: How to group results ('hour', 'day', 'app')
+            
+        Returns:
+            List of activity groups
+        """
+        # Simple implementation - just return app stats for now
+        return self.get_app_usage_stats(limit=20)

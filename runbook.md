@@ -14,24 +14,13 @@ nvidia-smi  # Optional, will use Docker if no GPU
 second-brain query "test" --limit 1
 ```
 
-## Step 1: Setup DeepSeek Docker (10 min)
+## Step 1: Setup DeepSeek MLX Backend (No Docker Required)
 ```bash
-# Clone fixed Docker implementation
-cd ~/
-git clone https://github.com/Bogdanovich77/DeekSeek-OCR---Dockerized-API deepseek-docker
-cd deepseek-docker
+# MLX-VLM is already in requirements.txt
+# The model downloads automatically on first use
 
-# Download model
-pip install huggingface_hub
-huggingface-cli download deepseek-ai/DeepSeek-OCR \
-    --local-dir models/deepseek-ai/DeepSeek-OCR
-
-# Start Docker service (runs on port 8001 to avoid conflict)
-sed -i 's/8000:8000/8001:8000/g' docker-compose.yml
-docker-compose up -d
-
-# Verify it's running
-curl http://localhost:8001/health
+# Configure Second Brain to use DeepSeek:
+second-brain start --ocr-engine deepseek --deepseek-backend mlx
 ```
 
 ## Step 2: Add DeepSeek OCR Module (15 min)

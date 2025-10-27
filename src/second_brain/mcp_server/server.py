@@ -322,23 +322,27 @@ class SecondBrainMCPServer:
         """
         logger.info("starting_mcp_server", transport=transport)
 
-        if transport == "stdio":
-            from mcp.server.stdio import stdio_server
-            async with stdio_server() as (read_stream, write_stream):
-                await self.server.run(
-                    read_stream,
-                    write_stream,
-                    InitializationOptions(
-                        server_name="secondbrain-mcp",
-                        server_version="1.0.0",
-                        capabilities=self.server.get_capabilities(
-                            notification_options=None,
-                            experimental_capabilities={}
+        try:
+            if transport == "stdio":
+                import mcp.server.stdio
+                async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+                    await self.server.run(
+                        read_stream,
+                        write_stream,
+                        InitializationOptions(
+                            server_name="secondbrain-mcp",
+                            server_version="1.0.0",
+                            capabilities=self.server.get_capabilities(
+                                notification_options=None,
+                                experimental_capabilities={}
+                            )
                         )
                     )
-                )
-        else:
-            raise ValueError(f"Unsupported transport: {transport}")
+            else:
+                raise ValueError(f"Unsupported transport: {transport}")
+        except Exception as e:
+            logger.error("mcp_server_error", error=str(e), error_type=type(e).__name__)
+            raise
 
     def close(self):
         """Close database connection."""

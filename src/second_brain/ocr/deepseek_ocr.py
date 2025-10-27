@@ -33,11 +33,7 @@ class DeepSeekOCR:
         """
         self.config = config or Config()
 
-        # Configuration
-        # Backend selection
-        self.backend = self.config.get('ocr.deepseek_backend', 'docker')
-        self.docker_url = self.config.get('ocr.deepseek_docker_url', 'http://localhost:8001')
-        self.use_docker = self.config.get('ocr.deepseek_docker', True)
+        # Configuration (MLX backend only)
         self.model_id = self.config.get('ocr.deepseek_model', 'mlx-community/DeepSeek-OCR-4bit')
         self.mode = self.config.get('ocr.deepseek_mode', 'optimal')
         self.max_retries = self.config.get('ocr.max_retries', 3)
@@ -58,8 +54,7 @@ class DeepSeekOCR:
 
         logger.info(
             "deepseek_ocr_initialized",
-            backend=self.backend,
-            docker_url=self.docker_url,
+            backend="mlx",
             mode=self.mode,
             model_id=self.model_id,
         )
@@ -99,39 +94,6 @@ class DeepSeekOCR:
                 await asyncio.sleep(sleep_time)
 
             self.last_request_time = time.time()
-
-    def _process_via_docker(self, image: Image.Image) -> Dict[str, Any]:
-        """Call Dockerized DeepSeek OCR API.
-
-        Args:
-            image: PIL Image object
-
-        Returns:
-            Dictionary containing OCR results
-        """
-        # Convert PIL to bytes
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format='PNG')
-        img_byte_arr.seek(0)
-
-        # Call API
-        files = {'file': ('screenshot.png', img_byte_arr, 'image/png')}
-        data = {
-            'prompt': self._build_prompt(),
-            'mode': self.mode
-        }
-
-        response = requests.post(
-            f"{self.docker_url}/ocr/image",
-            files=files,
-            data=data,
-            timeout=self.timeout
-        )
-
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise Exception(f"DeepSeek OCR failed: {response.text}")
 
     def _ensure_mlx_loaded(self) -> None:
         """Lazy-load MLX VLM model and processor."""
@@ -291,24 +253,8 @@ class DeepSeekOCR:
                 # Make API call
                 logger.debug("ocr_request_starting", frame_id=frame_id, attempt=attempt + 1, engine="deepseek")
 
-                # Choose backend
-                result: Dict[str, Any]
-                if self.backend == 'mlx':
-                    try:
-                        result = self._process_via_mlx(image)
-                    except Exception as mlx_exc:
-                        # Fallback to Docker if allowed
-                        if self.use_docker:
-                            logger.warning(
-                                "mlx_backend_failed_falling_back_to_docker",
-                                frame_id=frame_id,
-                                error=str(mlx_exc),
-                            )
-                            result = self._process_via_docker(image)
-                        else:
-                            raise
-                else:
-                    result = self._process_via_docker(image)
+                # Process via MLX backend
+                result = self._process_via_mlx(image)
 
                 # Convert to text blocks
                 text_blocks = self._convert_to_text_blocks(result, frame_id)
@@ -416,21 +362,8 @@ class DeepSeekOCR:
                 spacing=20
             )
 
-            # Process combined image via selected backend
-            if self.backend == 'mlx':
-                try:
-                    result = self._process_via_mlx(combined_image)
-                except Exception as mlx_exc:
-                    if self.use_docker:
-                        logger.warning(
-                            "mlx_backend_failed_batch_fallback_docker",
-                            error=str(mlx_exc),
-                        )
-                        result = self._process_via_docker(combined_image)
-                    else:
-                        raise
-            else:
-                result = self._process_via_docker(combined_image)
+            # Process combined image via MLX backend
+            result = self._process_via_mlx(combined_image)
 
             # Parse the combined result
             combined_text = result.get('result', '')

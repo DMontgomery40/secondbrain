@@ -1,89 +1,64 @@
 #!/bin/bash
-# Installation script for Second Brain
+# Installation script for Second Brain (macOS + MLX DeepSeek)
+set -euo pipefail
 
-set -e
+echo "🧠 Second Brain Installation"
+echo "============================"
 
-echo "🧠 Second Brain Installation Script"
-echo "===================================="
-echo ""
-
-# Check if running on macOS
-if [[ "$OSTYPE" != "darwin"* ]]; then
-    echo "❌ Error: This script only works on macOS"
-    exit 1
+# macOS check
+if [[ "$OSTYPE" != darwin* ]]; then
+  echo "❌ This script supports macOS only." >&2
+  exit 1
 fi
 
-# Check Python version
-echo "Checking Python version..."
-if ! command -v python3.11 &> /dev/null; then
-    echo "❌ Error: Python 3.11 is required but not found"
-    echo "Please install Python 3.11 first:"
-    echo "  brew install python@3.11"
-    exit 1
+# Python check
+if ! command -v python3.11 >/dev/null 2>&1; then
+  echo "❌ Python 3.11 is required. Install with: brew install python@3.11" >&2
+  exit 1
 fi
-
 echo "✓ Python 3.11 found"
 
-# Create virtual environment
-echo ""
-echo "Creating virtual environment..."
-python3.11 -m venv venv
-source venv/bin/activate
+# Venv
+VENV_DIR=.venv
+echo "Creating virtualenv at $VENV_DIR ..."
+python3.11 -m venv "$VENV_DIR"
+source "$VENV_DIR/bin/activate"
+python -V
+pip install -U pip wheel setuptools
 
-# Upgrade pip
-echo "Upgrading pip..."
-pip install --upgrade pip
-
-# Install dependencies
-echo ""
-echo "Installing dependencies..."
+echo "Installing Python dependencies (MCP temporarily disabled in requirements.txt)..."
 pip install -r requirements.txt
-
-# Install package
-echo ""
-echo "Installing Second Brain..."
 pip install -e .
 
-# Check for OpenAI API key
-echo ""
-if [ -f ".env" ]; then
-    echo "✓ .env file found"
-else
-    echo "⚠️  Warning: .env file not found"
-    echo "Please create .env file with your OpenAI API key:"
-    echo "  OPENAI_API_KEY=your-key-here"
+# Create data dirs
+echo "Creating data directories..."
+mkdir -p "$HOME/Library/Application Support/second-brain/"{frames,database,embeddings,logs,config}
+echo "✓ Directories ready"
+
+# UI build (optional)
+read -p "Build Timeline UI now (npm install && npm run build)? [Y/n] " -r REPLY
+if [[ -z "$REPLY" || "$REPLY" =~ ^[Yy]$ ]]; then
+  pushd web/timeline >/dev/null
+  npm install
+  npm run build
+  popd >/dev/null
 fi
 
-# Create necessary directories
-echo ""
-echo "Creating directories..."
-mkdir -p ~/Library/Application\ Support/second-brain/{frames,database,embeddings,logs,config}
-echo "✓ Directories created"
-
-# Install launchd service (optional)
-echo ""
-read -p "Install as launchd service (auto-start on login)? [y/N] " -n 1 -r
 echo
-if [[ $REPLY =~ ^[Yy]$ ]]; then
-    echo "Installing launchd service..."
-    
-    # Copy plist to LaunchAgents
-    cp com.secondbrain.capture.plist ~/Library/LaunchAgents/
-    
-    # Load service
-    launchctl load ~/Library/LaunchAgents/com.secondbrain.capture.plist
-    
-    echo "✓ Service installed and started"
-    echo "  To stop: launchctl unload ~/Library/LaunchAgents/com.secondbrain.capture.plist"
-fi
+echo "Screen Recording permission (Required):"
+echo "  System Settings → Privacy & Security → Screen Recording"
+echo "  Enable for your Terminal/iTerm and for $VENV_DIR/bin/python"
+echo "Accessibility (Recommended): Privacy & Security → Accessibility"
 
-echo ""
+echo
 echo "✅ Installation complete!"
-echo ""
-echo "Next steps:"
-echo "1. Activate virtual environment: source venv/bin/activate"
-echo "2. Check health: second-brain health"
-echo "3. Start service: second-brain start"
-echo "4. Search memory: second-brain query \"search term\""
-echo ""
-echo "For more information, see docs/SETUP.md"
+echo "Next:"
+echo "  1) source $VENV_DIR/bin/activate"
+echo "  2) Run one of the startup helpers:"
+echo "     • scripts/start_simple_deepseek.sh        # DeepSeek MLX (local)"
+echo "     • scripts/start_og_openai.sh             # Original GPT‑5 Vision"
+echo "     • scripts/start_everything_on.sh         # DeepSeek MLX + OpenAI embeddings + reranker (UI auto if built)"
+echo "  3) Or manual commands:"
+echo "     • second-brain start --ocr-engine deepseek       (MLX model downloads on first run)"
+echo "     • second-brain timeline --port 8000 --no-open    (if UI built)"
+echo "  4) See docs/SETUP.md for more details."

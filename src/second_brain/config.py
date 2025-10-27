@@ -26,15 +26,9 @@ DEFAULT_CONFIG = {
         "buffer_enabled": False,
         "buffer_duration": 30,
         "buffer_min_size": 10,
-        # DeepSeek backend selection and settings
-        # backend: 'docker' uses the Dockerized API, 'mlx' uses local MLX model
-        "deepseek_backend": "docker",
-        "deepseek_docker": True,
-        "deepseek_docker_url": "http://localhost:8001",
+        # DeepSeek OCR settings (MLX backend only)
         "deepseek_mode": "optimal",
-        # MLX model id from Hugging Face (Apple Silicon)
         "deepseek_model": "mlx-community/DeepSeek-OCR-4bit",
-        # MLX generation params
         "mlx_max_tokens": 1200,
         "mlx_temperature": 0.0,
     },
@@ -43,9 +37,16 @@ DEFAULT_CONFIG = {
         "compression": True,
     },
     "embeddings": {
-        "model": "sentence-transformers/all-MiniLM-L6-v2",
-        "dimension": 384,
         "enabled": True,
+        # Provider: 'sbert' (SentenceTransformers) or 'openai'
+        "provider": "sbert",
+        # SBERT model for embeddings
+        "model": "sentence-transformers/all-MiniLM-L6-v2",
+        # OpenAI embeddings model when provider='openai'
+        "openai_model": "text-embedding-3-small",
+        # Optional reranker using BAAI bge reranker
+        "reranker_enabled": False,
+        "reranker_model": "BAAI/bge-reranker-large",
     },
     "context7": {
         "api_key": os.getenv("CONTEXT7_API_KEY", "ctx7sk-44085384-6ccc-4905-9c14-a5f723022f72"),

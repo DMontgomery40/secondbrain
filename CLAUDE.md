@@ -74,10 +74,11 @@ class SecondBrainMCPServer:
 ```json
 {
   "ocr": {
-    "engine": "hybrid",          // NEW: openai|deepseek|hybrid
-    "deepseek_docker": true,     // NEW
-    "batch_size": 30,            // NEW
-    "buffer_duration": 30        // NEW
+    "engine": "deepseek",        // NEW: openai|deepseek
+    "deepseek_mode": "optimal",  // NEW: tiny|small|base|large|optimal
+    "deepseek_model": "mlx-community/DeepSeek-OCR-4bit",
+    "mlx_max_tokens": 1200,
+    "mlx_temperature": 0.0
   }
 }
 ```
@@ -89,14 +90,9 @@ class SecondBrainMCPServer:
 def __init__(self, config):
     # Add engine selection
     if config.ocr.engine == 'deepseek':
-        self.ocr = DeepSeekOCR(config)
-    elif config.ocr.engine == 'hybrid':
-        self.ocr = HybridOCR(openai, deepseek)  # Use both!
+        self.ocr = DeepSeekOCR(config)  # MLX backend only
     else:
-        self.ocr = OpenAIVisionOCR(config)  # Default/existing
-        
-    # Add optional buffering
-    self.buffer = ScreenshotBuffer() if config.ocr.buffer_duration else None
+        self.ocr = OpenAIVisionOCR(config)  # Default/existing (OpenAI)
 ```
 
 ### Database Migration (minor):
@@ -106,18 +102,21 @@ ALTER TABLE frame_text ADD COLUMN ocr_engine TEXT DEFAULT 'openai';
 ALTER TABLE frame_text ADD COLUMN compression_ratio REAL;
 ```
 
-## DOCKER SETUP (Separate service)
+## MLX BACKEND SETUP (No Docker Required)
 ```bash
-# Clone Bogdanovich77 fixed Docker
-git clone https://github.com/Bogdanovich77/DeekSeek-OCR---Dockerized-API
-docker-compose up -d  # Runs on port 8001
+# MLX-VLM backend is included in requirements.txt
+# Model downloads automatically on first use
+
+# Start with DeepSeek (MLX is the only backend now):
+second-brain start --ocr-engine deepseek
 ```
 
 ## TESTING STRATEGY
-1. Run DeepSeek in parallel, don't disable OpenAI
-2. Compare results: `SELECT * FROM frame_text WHERE ocr_engine='deepseek'`
-3. Gradually increase DeepSeek usage via config
-4. Keep OpenAI as fallback for failures
+1. Enable DeepSeek via CLI or Settings Panel
+2. Monitor performance with different modes (tiny/small/base/large)
+3. Compare results: `SELECT * FROM frame_text WHERE ocr_engine='deepseek'`
+4. Verify MLX model downloads correctly on first run
+5. Check memory usage and inference speed
 
 ## CLI ADDITIONS (backwards compatible)
 ```bash
@@ -125,9 +124,9 @@ docker-compose up -d  # Runs on port 8001
 second-brain start              # Respects config.ocr.engine
 
 # New commands
-second-brain start --ocr-engine deepseek --buffer-duration 60
-second-brain reprocess --engine deepseek --from 2024-01-01
-second-brain mcp-server        # Start MCP on port 3000
+second-brain start --ocr-engine deepseek
+second-brain mcp-server        # Start MCP server via stdio
+second-brain docs search "lib"  # Context7 documentation fetching
 ```
 
 ## FILE CHANGES SUMMARY
@@ -136,7 +135,6 @@ ADD:
 - src/second_brain/ocr/deepseek_ocr.py
 - src/second_brain/capture/screenshot_buffer.py  
 - src/second_brain/mcp_server/*.py
-- docker-compose.yml
 
 MODIFY (minimally):
 - src/second_brain/pipeline/processing_pipeline.py (add engine selection)
@@ -169,9 +167,12 @@ assert type(openai_result) == type(deepseek_result) == OCRResult
 ```
 
 ## ERROR HANDLING
-- DeepSeek fails → Fall back to OpenAI
-- Buffer full → Flush early
-- Docker down → Use OpenAI only
+- DeepSeek fails → Retry with exponential backoff
+- Model download issues → Manual download via huggingface-cli
 - MCP disconnect → Main app unaffected
+- MLX performance issues → Adjust mode (tiny/small/base/large)
+
+## MCP SERVER NOTE
+**Important**: The MCP server may show "unhandled errors in a TaskGroup" when killed/interrupted during stdio operation. This is expected behavior when stdin is interrupted and does not indicate a problem. The server works correctly during normal operation.
 
 ## THIS IS AN ENHANCEMENT, NOT A REWRITE!

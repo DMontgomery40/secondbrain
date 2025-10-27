@@ -20,7 +20,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from .config import Config
 from .database import Database
 from .pipeline import ProcessingPipeline
-from .embeddings import EmbeddingService
+# Lazy import EmbeddingService only when needed to avoid heavy deps at startup
 from .context7_client import Context7Client
 
 # Load environment variables
@@ -90,12 +90,20 @@ def main():
 @main.command()
 @click.option("--fps", type=float, help="Frames per second to capture")
 @click.option("--ocr-engine", type=click.Choice(["openai", "deepseek"]), help="OCR engine to use (simple toggle, no hybrid)")
-@click.option(
-    "--deepseek-backend",
-    type=click.Choice(["docker", "mlx"]),
-    help="If using --ocr-engine deepseek, choose backend (docker or mlx)",
-)
-def start(fps: Optional[float], ocr_engine: Optional[str], deepseek_backend: Optional[str]):
+@click.option("--embeddings-provider", type=click.Choice(["sbert", "openai"]), help="Embeddings provider for semantic search")
+@click.option("--embeddings-model", help="SentenceTransformers model name when provider=sbert")
+@click.option("--openai-emb-model", help="OpenAI embeddings model when provider=openai")
+@click.option("--enable-reranker/--disable-reranker", default=None, help="Enable or disable BAAI reranker")
+@click.option("--reranker-model", help="BAAI reranker model id (e.g., BAAI/bge-reranker-large)")
+def start(
+    fps: Optional[float],
+    ocr_engine: Optional[str],
+    embeddings_provider: Optional[str],
+    embeddings_model: Optional[str],
+    openai_emb_model: Optional[str],
+    enable_reranker: Optional[bool],
+    reranker_model: Optional[str],
+):
     """Start the capture service."""
     if is_running():
         console.print("[yellow]Service is already running[/yellow]")
@@ -114,10 +122,23 @@ def start(fps: Optional[float], ocr_engine: Optional[str], deepseek_backend: Opt
     if ocr_engine:
         config.set("ocr.engine", ocr_engine)
         console.print(f"[cyan]Using OCR engine: {ocr_engine}[/cyan]")
-    # If deepseek selected, optionally set backend
-    if ocr_engine == "deepseek" and deepseek_backend:
-        config.set("ocr.deepseek_backend", deepseek_backend)
-        console.print(f"[cyan]DeepSeek backend: {deepseek_backend}[/cyan]")
+
+    # Embeddings provider and models
+    if embeddings_provider:
+        config.set("embeddings.provider", embeddings_provider)
+        console.print(f"[cyan]Embeddings provider: {embeddings_provider}[/cyan]")
+    if embeddings_model:
+        config.set("embeddings.model", embeddings_model)
+        console.print(f"[cyan]SBERT model: {embeddings_model}[/cyan]")
+    if openai_emb_model:
+        config.set("embeddings.openai_model", openai_emb_model)
+        console.print(f"[cyan]OpenAI embedding model: {openai_emb_model}[/cyan]")
+    if enable_reranker is not None:
+        config.set("embeddings.reranker_enabled", bool(enable_reranker))
+        console.print(f"[cyan]Reranker enabled: {bool(enable_reranker)}[/cyan]")
+    if reranker_model:
+        config.set("embeddings.reranker_model", reranker_model)
+        console.print(f"[cyan]Reranker model: {reranker_model}[/cyan]")
     
     # Save PID
     save_pid()
@@ -241,7 +262,8 @@ def status():
 @click.option("--to", "to_date", help="End date (YYYY-MM-DD)")
 @click.option("--limit", default=10, help="Maximum number of results")
 @click.option("--semantic", is_flag=True, help="Use semantic vector search")
-def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Optional[str], limit: int, semantic: bool):
+@click.option("--rerank", is_flag=True, help="Rerank results with BAAI/bge reranker if enabled")
+def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Optional[str], limit: int, semantic: bool, rerank: bool):
     """Search captured memory."""
     console.print(f"[cyan]Searching for:[/cyan] {query}")
     
@@ -279,11 +301,13 @@ def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Opt
             progress.add_task(description="Searching...", total=None)
 
             if semantic:
+                from .embeddings import EmbeddingService  # type: ignore
                 embedding_service = EmbeddingService()
                 matches = embedding_service.search(
                     query=query,
                     limit=limit,
                     app_filter=app,
+                    rerank=rerank,
                 )
 
                 for match in matches:
@@ -311,6 +335,16 @@ def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Opt
                     end_timestamp=end_timestamp,
                     limit=limit,
                 )
+                # Optionally rerank the FTS results
+                if rerank and results:
+                    from .embeddings import EmbeddingService  # type: ignore
+                    embedding_service = EmbeddingService()
+                    texts = [r.get("text", "") for r in results]
+                    scores = embedding_service.rerank(query, texts)
+                    # Attach scores and sort by rerank score desc
+                    for r, s in zip(results, scores):
+                        r["rerank_score"] = s
+                    results.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
                 for result in results:
                     display_results.append(
                         {
@@ -319,6 +353,7 @@ def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Opt
                             "timestamp": result.get("timestamp"),
                             "text": result.get("text", ""),
                             "score": result.get("score"),
+                            "rerank_score": result.get("rerank_score"),
                             "method": "fts",
                         }
                     )

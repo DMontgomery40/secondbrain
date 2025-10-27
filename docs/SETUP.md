@@ -1,10 +1,10 @@
-# Second Brain - Setup Guide
+# Second Brain - Setup Guide (macOS)
 
 ## Prerequisites
 
 - macOS (required for screen capture APIs)
 - Python 3.11 or higher
-- OpenAI API key (for OpenAI OCR engine) OR Docker (for DeepSeek OCR engine)
+- OpenAI API key (for OpenAI OCR or OpenAI embeddings) OR use DeepSeek MLX backend (local)
 - Node.js 20 or higher (for building the timeline UI)
 
 ## Installation
@@ -54,11 +54,11 @@ cd ../..
 
 ### Environment Variables
 
-The `.env` file has been created with your OpenAI API key. The system will automatically load it.
+Create a `.env` file with your OpenAI API key if you plan to use OpenAI (OCR or embeddings). The system automatically loads it.
 
 To modify settings, edit `~/.config/second-brain/settings.json` or use the default configuration.
 
-### Default Configuration
+### Default Configuration (key excerpts)
 
 You can edit these settings via:
 1. **Timeline UI Settings Panel (⚙️)** - Recommended, provides validation and live stats
@@ -82,10 +82,14 @@ You can edit these settings via:
     "rate_limit_rpm": 50,
     "include_semantic_context": true,
     "timeout_seconds": 30,
-    // DeepSeek-specific options:
+    // DeepSeek backends:
+    "deepseek_backend": "docker",    // "docker" or "mlx"
     "deepseek_docker": true,
     "deepseek_docker_url": "http://localhost:8001",
     "deepseek_mode": "optimal",      // tiny|small|base|large|optimal
+    "deepseek_model": "mlx-community/DeepSeek-OCR-4bit",
+    "mlx_max_tokens": 1200,
+    "mlx_temperature": 0.0,
     "buffer_duration": 30
   },
   "storage": {
@@ -93,9 +97,12 @@ You can edit these settings via:
     "compression": true
   },
   "embeddings": {
+    "enabled": true,
+    "provider": "sbert",             // "sbert" or "openai"
     "model": "sentence-transformers/all-MiniLM-L6-v2",
-    "dimension": 384,
-    "enabled": true
+    "openai_model": "text-embedding-3-small",
+    "reranker_enabled": false,
+    "reranker_model": "BAAI/bge-reranker-large"
   },
   "context7": {
     "enabled": true,
@@ -119,15 +126,24 @@ All data is stored locally in:
 
 ## Usage
 
+### Startup Scripts
+
+After installation, you can use convenience scripts from the repo root:
+
+- scripts/start_simple_deepseek.sh — DeepSeek OCR via MLX (local)
+- scripts/start_og_openai.sh — Original GPT‑5 Vision OCR
+- scripts/start_everything_on.sh — DeepSeek MLX + OpenAI embeddings + BAAI reranker; if Timeline UI is built, it is started in the background
+
 ### Start the Capture Service
 
 ```bash
 # Start with default OCR engine (configured in settings)
 second-brain start
 
-# Or specify OCR engine on startup
+# Or specify OCR engine and backend on startup
 second-brain start --ocr-engine openai
-second-brain start --ocr-engine deepseek
+second-brain start --ocr-engine deepseek --deepseek-backend mlx   # local MLX (Apple Silicon)
+second-brain start --ocr-engine deepseek --deepseek-backend docker
 
 # Adjust FPS for cost control
 second-brain start --fps 0.5
@@ -157,8 +173,11 @@ second-brain query "search term" --app "VSCode"
 # Search with date range
 second-brain query "search term" --from "2025-10-20" --to "2025-10-26"
 
-# Semantic search
-second-brain query "search term" --semantic
+# Semantic search with reranker
+second-brain query "search term" --semantic --rerank
+
+# FTS search with reranker
+second-brain query "search term" --rerank
 ```
 
 ### Launch the Timeline UI
@@ -273,8 +292,9 @@ If you get an API key error:
 ### Permission Issues
 
 macOS may require permissions for:
-- Screen Recording (System Preferences → Security & Privacy → Screen Recording)
-- Accessibility (System Preferences → Security & Privacy → Accessibility)
+- Screen Recording: System Settings → Privacy & Security → Screen Recording
+  - Enable for your Terminal (Terminal/iTerm) and your Python binary in the venv
+- Accessibility: System Settings → Privacy & Security → Accessibility (optional)
 
 ### Rate Limiting
 
@@ -300,9 +320,9 @@ Based on 1 fps capture rate:
 - At $0.01 per 1,000 images (GPT-5 pricing): ~$0.86/day
 - Recommended: Use lower fps (0.5 fps) for ~$0.43/day
 
-### DeepSeek OCR
+### DeepSeek OCR (MLX)
 
-- **100% FREE** - Runs locally in Docker
+- **100% FREE** - Runs locally via MLX (Apple Silicon)
 - No API costs, no rate limits
 - 10-20x compression via batch processing
 - Slightly lower accuracy than GPT-5, but excellent for most use cases
@@ -315,55 +335,26 @@ Adjust `capture.fps` and `ocr.engine` in configuration to balance costs and qual
 
 ## DeepSeek OCR Setup (Optional)
 
-To use the free DeepSeek OCR engine:
+To use the free DeepSeek OCR engine with local MLX backend (Apple Silicon):
 
-### 1. Clone the Dockerized DeepSeek OCR
+No Docker required. MLX-VLM is already listed in requirements.txt and will download the model on first run.
 
-```bash
-# Clone the repository with Docker support
-git clone https://github.com/Bogdanovich77/DeekSeek-OCR---Dockerized-API deepseek-docker
-cd deepseek-docker
+Update settings to use MLX:
+```
+{
+  "ocr": {
+    "engine": "deepseek",
+    "deepseek_model": "mlx-community/DeepSeek-OCR-4bit"
+  }
+}
 ```
 
-### 2. Configure Port (Avoid Conflicts)
-
-Edit `docker-compose.yml` to use port 8001 (Second Brain API uses 8000):
-
-```bash
-sed -i '' 's/8000:8000/8001:8000/g' docker-compose.yml
+Or via CLI:
+```
+second-brain start --ocr-engine deepseek
 ```
 
-Or manually edit:
-```yaml
-ports:
-  - "8001:8000"  # Changed from 8000:8000
-```
-
-### 3. Download the Model (Optional - Can Skip for Testing)
-
-The DeepSeek OCR model is large (~3GB). You can skip this initially and test with the demo model:
-
-```bash
-# If you want the full model:
-pip install huggingface_hub
-huggingface-cli download deepseek-ai/DeepSeek-OCR --local-dir models/
-
-# Otherwise, the Docker image includes a demo model
-```
-
-### 4. Start the Docker Service
-
-```bash
-docker-compose up -d
-```
-
-Verify it's running:
-```bash
-curl http://localhost:8001/health
-# Should return: {"status": "healthy"}
-```
-
-### 5. Configure Second Brain
+### Configure Second Brain
 
 Three ways to enable DeepSeek:
 
@@ -380,12 +371,12 @@ second-brain start --ocr-engine deepseek
 ```
 
 **C. Via Config File:**
-Edit `~/.config/second-brain/settings.json`:
+Edit `~/Library/Application Support/second-brain/config/settings.json`:
 ```json
 {
   "ocr": {
     "engine": "deepseek",
-    "deepseek_docker_url": "http://localhost:8001"
+    "deepseek_model": "mlx-community/DeepSeek-OCR-4bit"
   }
 }
 ```
@@ -408,23 +399,14 @@ tail -f ~/Library/Application\ Support/second-brain/logs/ocr.log
 
 ### Troubleshooting DeepSeek
 
-**Docker not running:**
+**Model download issues:**
 ```bash
-docker ps  # Should show deepseek container
-docker-compose up -d  # Restart if needed
+# Manual model download if automatic download fails
+pip install huggingface_hub
+huggingface-cli download mlx-community/DeepSeek-OCR-4bit --local-dir ~/.cache/huggingface/
 ```
 
-**Port conflict (8001 already in use):**
-Edit `docker-compose.yml` to use a different port (e.g., 8002) and update Second Brain config:
-```json
-{
-  "ocr": {
-    "deepseek_docker_url": "http://localhost:8002"
-  }
-}
-```
-
-**Low accuracy:**
+**Slow performance:**
 Try different DeepSeek modes in Settings Panel → OCR → DeepSeek Mode:
 - `tiny`: Fastest, lowest accuracy
 - `small`: Balanced
@@ -433,6 +415,33 @@ Try different DeepSeek modes in Settings Panel → OCR → DeepSeek Mode:
 - `optimal`: Automatic selection (recommended)
 
 ---
+
+## Embeddings Providers and Reranker
+
+Second Brain supports two embeddings providers and an optional reranker:
+
+- Provider 'sbert' (local): set `embeddings.provider` to `sbert` and choose `embeddings.model`.
+- Provider 'openai' (API): set `embeddings.provider` to `openai` and `embeddings.openai_model` (requires OPENAI_API_KEY).
+- Reranker: enable `embeddings.reranker_enabled` and choose `embeddings.reranker_model` (default BAAI/bge-reranker-large).
+
+Example:
+```
+{
+  "embeddings": {
+    "enabled": true,
+    "provider": "openai",
+    "openai_model": "text-embedding-3-small",
+    "reranker_enabled": true,
+    "reranker_model": "BAAI/bge-reranker-large"
+  }
+}
+```
+
+CLI shortcuts:
+```
+second-brain start --embeddings-provider sbert --embeddings-model sentence-transformers/all-MiniLM-L6-v2 --enable-reranker
+second-brain start --embeddings-provider openai --openai-emb-model text-embedding-3-small --enable-reranker
+```
 
 ## Advanced: Context7 Integration
 
