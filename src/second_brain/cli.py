@@ -89,20 +89,33 @@ def main():
 
 @main.command()
 @click.option("--fps", type=float, help="Frames per second to capture")
-def start(fps: Optional[float]):
+@click.option("--ocr-engine", type=click.Choice(["openai", "deepseek", "hybrid"]), help="OCR engine to use")
+@click.option("--buffer-duration", type=int, help="Screenshot buffer duration in seconds (for deepseek/hybrid)")
+def start(fps: Optional[float], ocr_engine: Optional[str], buffer_duration: Optional[int]):
     """Start the capture service."""
     if is_running():
         console.print("[yellow]Service is already running[/yellow]")
         return
-    
+
     console.print("[green]Starting Second Brain capture service...[/green]")
-    
+
     # Load config
     config = Config()
-    
+
     # Override FPS if provided
     if fps:
         config.set("capture.fps", fps)
+
+    # Override OCR engine if provided
+    if ocr_engine:
+        config.set("ocr.engine", ocr_engine)
+        console.print(f"[cyan]Using OCR engine: {ocr_engine}[/cyan]")
+
+        # Enable buffering for DeepSeek/hybrid if buffer duration specified
+        if buffer_duration and ocr_engine in ["deepseek", "hybrid"]:
+            config.set("ocr.buffer_enabled", True)
+            config.set("ocr.buffer_duration", buffer_duration)
+            console.print(f"[cyan]Screenshot buffering enabled: {buffer_duration}s[/cyan]")
     
     # Save PID
     save_pid()
@@ -428,6 +441,41 @@ def timeline(host: str, port: int, no_open: bool):
         asyncio.run(server.serve())
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down timeline server...[/yellow]")
+
+
+@main.command("mcp-server")
+@click.option("--transport", type=click.Choice(["stdio"]), default="stdio", help="Transport protocol")
+def mcp_server(transport: str):
+    """Start the MCP server to expose Second Brain functionality.
+
+    This allows AI assistants and other tools to query your Second Brain memory
+    using the Model Context Protocol (MCP).
+    """
+    from .mcp_server import SecondBrainMCPServer
+
+    console.print("[green]Starting Second Brain MCP Server...[/green]")
+    console.print(f"[cyan]Transport: {transport}[/cyan]")
+
+    config = Config()
+    server = SecondBrainMCPServer(config=config)
+
+    console.print("[green]✓ MCP Server initialized[/green]")
+    console.print("[dim]Press Ctrl+C to stop[/dim]\n")
+
+    async def run():
+        try:
+            await server.run(transport=transport)
+        except KeyboardInterrupt:
+            console.print("\n[yellow]Shutting down MCP server...[/yellow]")
+        finally:
+            server.close()
+            console.print("[green]MCP server stopped[/green]")
+
+    try:
+        asyncio.run(run())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+        sys.exit(1)
 
 
 @main.group()

@@ -45,3 +45,7 @@ structlog==23.2.0
 # MCP and Context7
 mcp==0.9.0
 httpx==0.26.0
+
+# Image processing for DeepSeek OCR
+Pillow==10.2.0
+requests==2.31.0

@@ -23,6 +23,12 @@ DEFAULT_CONFIG = {
         "rate_limit_rpm": 50,
         "include_semantic_context": True,
         "timeout_seconds": 30,
+        "buffer_enabled": False,
+        "buffer_duration": 30,
+        "buffer_min_size": 10,
+        "deepseek_docker": True,
+        "deepseek_docker_url": "http://localhost:8001",
+        "deepseek_mode": "optimal",
     },
     "storage": {
         "retention_days": 90,

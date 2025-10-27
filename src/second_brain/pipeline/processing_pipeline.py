@@ -8,9 +8,10 @@ from collections import deque
 import structlog
 
 from ..capture import CaptureService
+from ..capture.screenshot_buffer import ScreenshotBuffer
 from ..config import Config
 from ..database import Database
-from ..ocr import OpenAIOCR
+from ..ocr import OpenAIOCR, DeepSeekOCR
 from ..embeddings import EmbeddingService
 
 logger = structlog.get_logger()
@@ -21,17 +22,46 @@ class ProcessingPipeline:
 
     def __init__(self, config: Optional[Config] = None):
         """Initialize processing pipeline.
-        
+
         Args:
             config: Configuration instance. If None, uses global config.
         """
         self.config = config or Config()
-        
+
         # Initialize components
         self.capture_service = CaptureService(self.config)
-        self.ocr_service = OpenAIOCR(self.config)
+
+        # OCR engine selection
+        ocr_engine = self.config.get("ocr.engine", "openai")
+        logger.info("initializing_ocr_engine", engine=ocr_engine)
+
+        if ocr_engine == "deepseek":
+            self.ocr_service = DeepSeekOCR(self.config)
+            self.fallback_ocr = None
+        elif ocr_engine == "hybrid":
+            self.ocr_service = DeepSeekOCR(self.config)
+            self.fallback_ocr = OpenAIOCR(self.config)
+            logger.info("hybrid_mode_enabled", primary="deepseek", fallback="openai")
+        else:
+            self.ocr_service = OpenAIOCR(self.config)
+            self.fallback_ocr = None
+
         self.database = Database(config=self.config)
         self.embedding_service = EmbeddingService(self.config)
+
+        # Optional screenshot buffering for batch processing
+        buffer_enabled = self.config.get("ocr.buffer_enabled", False)
+        if buffer_enabled and ocr_engine in ["deepseek", "hybrid"]:
+            buffer_duration = self.config.get("ocr.buffer_duration", 30)
+            buffer_min_size = self.config.get("ocr.buffer_min_size", 10)
+            self.screenshot_buffer = ScreenshotBuffer(
+                duration_seconds=buffer_duration,
+                max_size=30,
+                min_flush_size=buffer_min_size
+            )
+            logger.info("screenshot_buffer_enabled", duration=buffer_duration)
+        else:
+            self.screenshot_buffer = None
         
         # OCR queue
         self.ocr_queue: deque = deque()
@@ -112,9 +142,21 @@ class ProcessingPipeline:
             try:
                 # Extract frame paths and IDs
                 image_paths = [(path, metadata["frame_id"]) for path, metadata in batch]
-                
-                # Run OCR on batch
-                results = await self.ocr_service.process_batch(image_paths)
+
+                # Run OCR on batch (with optional fallback for hybrid mode)
+                try:
+                    results = await self.ocr_service.process_batch(image_paths)
+                except Exception as ocr_error:
+                    # If DeepSeek fails and we have fallback, use OpenAI
+                    if self.fallback_ocr:
+                        logger.warning(
+                            "primary_ocr_failed_using_fallback",
+                            error=str(ocr_error),
+                            fallback_engine="openai"
+                        )
+                        results = await self.fallback_ocr.process_batch(image_paths)
+                    else:
+                        raise
                 
                 # Store results in database
                 for (frame_path, metadata), text_blocks in zip(batch, results):
