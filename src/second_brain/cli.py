@@ -90,7 +90,12 @@ def main():
 @main.command()
 @click.option("--fps", type=float, help="Frames per second to capture")
 @click.option("--ocr-engine", type=click.Choice(["openai", "deepseek"]), help="OCR engine to use (simple toggle, no hybrid)")
-def start(fps: Optional[float], ocr_engine: Optional[str]):
+@click.option(
+    "--deepseek-backend",
+    type=click.Choice(["docker", "mlx"]),
+    help="If using --ocr-engine deepseek, choose backend (docker or mlx)",
+)
+def start(fps: Optional[float], ocr_engine: Optional[str], deepseek_backend: Optional[str]):
     """Start the capture service."""
     if is_running():
         console.print("[yellow]Service is already running[/yellow]")
@@ -109,6 +114,10 @@ def start(fps: Optional[float], ocr_engine: Optional[str]):
     if ocr_engine:
         config.set("ocr.engine", ocr_engine)
         console.print(f"[cyan]Using OCR engine: {ocr_engine}[/cyan]")
+    # If deepseek selected, optionally set backend
+    if ocr_engine == "deepseek" and deepseek_backend:
+        config.set("ocr.deepseek_backend", deepseek_backend)
+        console.print(f"[cyan]DeepSeek backend: {deepseek_backend}[/cyan]")
     
     # Save PID
     save_pid()

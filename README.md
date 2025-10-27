@@ -40,6 +40,8 @@ Second Brain is a local-first, high-fidelity desktop memory system for macOS. It
 - ✨ MCP server for AI assistant integration
 - ✨ Context7 integration for documentation fetching
 - ✨ Image combination for batch processing
+  
+  DeepSeek OCR now supports a local MLX backend using the Hugging Face model `mlx-community/DeepSeek-OCR-4bit` for Apple Silicon. You can run DeepSeek either via Docker API or locally via MLX.
 
 ---
 
@@ -120,9 +122,27 @@ You can choose your OCR engine in three ways:
 2. **GUI toggle:** Click ⚙️ in Timeline UI → OCR Engine
 3. **Config file:** Edit `~/Library/Application Support/second-brain/config/settings.json`
 
+**DeepSeek backends:**
+- Docker API (default): set `ocr.deepseek_backend` to `"docker"` and ensure the Docker service is running.
+- Local MLX (Apple Silicon): set `ocr.deepseek_backend` to `"mlx"` and `ocr.deepseek_model` to `"mlx-community/DeepSeek-OCR-4bit"` (default). Requires `mlx-vlm` (already in requirements.txt). First run will download weights from Hugging Face.
+
+Example config overrides in `settings.json`:
+
+```
+{
+  "ocr": {
+    "engine": "deepseek",
+    "deepseek_backend": "mlx", // or "docker"
+    "deepseek_model": "mlx-community/DeepSeek-OCR-4bit",
+    "mlx_max_tokens": 1200,
+    "mlx_temperature": 0.0
+  }
+}
+```
+
 **Cost comparison:**
 - OpenAI GPT-5: ~$0.01 per frame, very accurate, includes semantic context
-- DeepSeek OCR: Free, runs locally in Docker, 10-20x compression, batch processing
+- DeepSeek OCR (Docker or MLX): Free/local, 10-20x compression, batch processing
 
 ---
 

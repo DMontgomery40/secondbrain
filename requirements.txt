@@ -49,3 +49,7 @@ httpx==0.26.0
 # Image processing for DeepSeek OCR
 Pillow==10.2.0
 requests==2.31.0
+
+# Local MLX VLM backend for DeepSeek OCR (Apple Silicon)
+# Install only if running on macOS/arm64; safe to include as optional runtime dep
+mlx-vlm>=0.3.4

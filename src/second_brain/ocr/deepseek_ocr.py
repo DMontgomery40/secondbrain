@@ -34,8 +34,11 @@ class DeepSeekOCR:
         self.config = config or Config()
 
         # Configuration
+        # Backend selection
+        self.backend = self.config.get('ocr.deepseek_backend', 'docker')
         self.docker_url = self.config.get('ocr.deepseek_docker_url', 'http://localhost:8001')
         self.use_docker = self.config.get('ocr.deepseek_docker', True)
+        self.model_id = self.config.get('ocr.deepseek_model', 'mlx-community/DeepSeek-OCR-4bit')
         self.mode = self.config.get('ocr.deepseek_mode', 'optimal')
         self.max_retries = self.config.get('ocr.max_retries', 3)
         self.timeout = self.config.get('ocr.timeout_seconds', 30)
@@ -47,10 +50,19 @@ class DeepSeekOCR:
         self.last_request_time = 0.0
         self._rate_limit_lock = asyncio.Lock()
 
-        logger.info("deepseek_ocr_initialized",
-                   docker_url=self.docker_url,
-                   mode=self.mode,
-                   use_docker=self.use_docker)
+        # MLX state (lazy-loaded)
+        self._mlx_model = None
+        self._mlx_processor = None
+        self._mlx_config = None
+        self._mlx_loaded = False
+
+        logger.info(
+            "deepseek_ocr_initialized",
+            backend=self.backend,
+            docker_url=self.docker_url,
+            mode=self.mode,
+            model_id=self.model_id,
+        )
 
     def _encode_image(self, image_path: Path) -> str:
         """Encode image to base64.
@@ -120,6 +132,78 @@ class DeepSeekOCR:
             return response.json()
         else:
             raise Exception(f"DeepSeek OCR failed: {response.text}")
+
+    def _ensure_mlx_loaded(self) -> None:
+        """Lazy-load MLX VLM model and processor."""
+        if self._mlx_loaded:
+            return
+        try:
+            # Import here to avoid hard dependency when using Docker backend
+            from mlx_vlm import load as mlx_load
+            from mlx_vlm.utils import load_config as mlx_load_config
+            from mlx_vlm.prompt_utils import apply_chat_template
+
+            model, processor = mlx_load(self.model_id)
+            config = mlx_load_config(self.model_id)
+
+            # Stash
+            self._mlx_model = model
+            self._mlx_processor = processor
+            self._mlx_config = config
+            self._mlx_apply_chat_template = apply_chat_template
+            self._mlx_loaded = True
+
+            logger.info("mlx_backend_loaded", model_id=self.model_id)
+        except Exception as exc:
+            logger.error("mlx_backend_load_failed", error=str(exc))
+            raise
+
+    def _process_via_mlx(self, image: Image.Image) -> Dict[str, Any]:
+        """Run OCR using local MLX VLM backend.
+
+        Returns a dict compatible with Docker response structure: {"result": str, "confidence": float, ...}
+        """
+        # Ensure model is loaded
+        self._ensure_mlx_loaded()
+
+        from mlx_vlm import generate as mlx_generate
+
+        # Build prompt tuned for OCR; ask for plain text with structure
+        if self.include_semantic_context:
+            user_prompt = (
+                "You are an OCR model. Read the entire screenshot and extract all visible text. "
+                "Preserve order and logical grouping. Provide brief semantic context at the top under 'Context:'.\n\n"
+                "Return plain text."
+            )
+        else:
+            user_prompt = (
+                "Extract all visible text from the image. Return plain text only."
+            )
+
+        # Apply chat template
+        formatted = self._mlx_apply_chat_template(
+            self._mlx_processor, self._mlx_config, user_prompt, num_images=1
+        )
+
+        # Run generation
+        max_tokens = self.config.get('ocr.mlx_max_tokens', 1200)
+        temperature = self.config.get('ocr.mlx_temperature', 0.0)
+
+        output = mlx_generate(
+            self._mlx_model,
+            self._mlx_processor,
+            formatted,
+            [image],  # PIL Image list
+            verbose=False,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+        # Package result
+        return {
+            "result": str(output).strip(),
+            "confidence": 0.92,  # heuristic baseline since model doesn't return scores
+        }
 
     def _convert_to_text_blocks(self, deepseek_result: Dict[str, Any], frame_id: str) -> List[Dict[str, Any]]:
         """Convert DeepSeek format to text block format.
@@ -207,7 +291,24 @@ class DeepSeekOCR:
                 # Make API call
                 logger.debug("ocr_request_starting", frame_id=frame_id, attempt=attempt + 1, engine="deepseek")
 
-                result = self._process_via_docker(image)
+                # Choose backend
+                result: Dict[str, Any]
+                if self.backend == 'mlx':
+                    try:
+                        result = self._process_via_mlx(image)
+                    except Exception as mlx_exc:
+                        # Fallback to Docker if allowed
+                        if self.use_docker:
+                            logger.warning(
+                                "mlx_backend_failed_falling_back_to_docker",
+                                frame_id=frame_id,
+                                error=str(mlx_exc),
+                            )
+                            result = self._process_via_docker(image)
+                        else:
+                            raise
+                else:
+                    result = self._process_via_docker(image)
 
                 # Convert to text blocks
                 text_blocks = self._convert_to_text_blocks(result, frame_id)
@@ -315,8 +416,21 @@ class DeepSeekOCR:
                 spacing=20
             )
 
-            # Process combined image
-            result = self._process_via_docker(combined_image)
+            # Process combined image via selected backend
+            if self.backend == 'mlx':
+                try:
+                    result = self._process_via_mlx(combined_image)
+                except Exception as mlx_exc:
+                    if self.use_docker:
+                        logger.warning(
+                            "mlx_backend_failed_batch_fallback_docker",
+                            error=str(mlx_exc),
+                        )
+                        result = self._process_via_docker(combined_image)
+                    else:
+                        raise
+            else:
+                result = self._process_via_docker(combined_image)
 
             # Parse the combined result
             combined_text = result.get('result', '')

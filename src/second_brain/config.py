@@ -26,9 +26,17 @@ DEFAULT_CONFIG = {
         "buffer_enabled": False,
         "buffer_duration": 30,
         "buffer_min_size": 10,
+        # DeepSeek backend selection and settings
+        # backend: 'docker' uses the Dockerized API, 'mlx' uses local MLX model
+        "deepseek_backend": "docker",
         "deepseek_docker": True,
         "deepseek_docker_url": "http://localhost:8001",
         "deepseek_mode": "optimal",
+        # MLX model id from Hugging Face (Apple Silicon)
+        "deepseek_model": "mlx-community/DeepSeek-OCR-4bit",
+        # MLX generation params
+        "mlx_max_tokens": 1200,
+        "mlx_temperature": 0.0,
     },
     "storage": {
         "retention_days": 90,
