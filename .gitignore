@@ -61,8 +61,8 @@ logs/
 config/settings.json
 .env
 
-# Embeddings and vector stores
-embeddings/
+# Embeddings and vector stores (data directories only, not source code)
+data/embeddings/
 chroma/
 *.index
 *.faiss

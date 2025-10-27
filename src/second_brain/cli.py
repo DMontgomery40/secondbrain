@@ -430,5 +430,95 @@ def timeline(host: str, port: int, no_open: bool):
         console.print("\n[yellow]Shutting down timeline server...[/yellow]")
 
 
+@main.command()
+@click.option("--transport", type=click.Choice(["stdio", "sse"]), default="stdio", show_default=True, help="Transport protocol (stdio for Claude Desktop, sse for HTTP)")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Host for SSE transport")
+@click.option("--port", default=8100, show_default=True, type=int, help="Port for SSE transport")
+def mcp(transport: str, host: str, port: int):
+    """
+    Start MCP (Model Context Protocol) server.
+
+    This exposes Second Brain's visual memory as MCP tools that can be consumed
+    by AI assistants like Claude Desktop or AGRO RAG engine.
+
+    Use 'stdio' transport for Claude Desktop integration.
+    Use 'sse' transport for HTTP-based clients like AGRO.
+    """
+    try:
+        from .mcp.server import create_mcp_server
+    except ImportError:
+        console.print("[red]MCP SDK not installed. Install with: pip install mcp[cli][/red]")
+        sys.exit(1)
+
+    console.print(f"[green]Starting Second Brain MCP server ({transport} transport)...[/green]")
+
+    config = Config()
+    mcp_server = create_mcp_server(config=config)
+
+    async def run_stdio():
+        """Run with stdio transport for Claude Desktop."""
+        from mcp.server.stdio import stdio_server
+
+        console.print("[green]✓[/green] MCP server ready (stdio)")
+        console.print("[dim]Connect from Claude Desktop or pipe to stdin/stdout[/dim]")
+
+        async with stdio_server() as (read_stream, write_stream):
+            await mcp_server.run(
+                read_stream,
+                write_stream,
+                mcp_server.create_initialization_options()
+            )
+
+    async def run_sse():
+        """Run with SSE transport for HTTP clients."""
+        from mcp.server.sse import SseServerTransport
+        from starlette.applications import Starlette
+        from starlette.routing import Route
+
+        sse = SseServerTransport("/messages")
+
+        async def handle_sse(request):
+            async with sse.connect_sse(
+                request.scope, request.receive, request._send
+            ) as streams:
+                await mcp_server.run(
+                    streams[0], streams[1], mcp_server.create_initialization_options()
+                )
+
+        async def handle_messages(request):
+            await sse.handle_post_message(request.scope, request.receive, request._send)
+
+        app = Starlette(
+            routes=[
+                Route("/sse", endpoint=handle_sse),
+                Route("/messages", endpoint=handle_messages, methods=["POST"]),
+            ]
+        )
+
+        url = f"http://{host}:{port}"
+        console.print(f"[green]✓[/green] MCP server available at {url}")
+        console.print(f"[dim]SSE endpoint: {url}/sse[/dim]")
+        console.print(f"[dim]Messages endpoint: {url}/messages[/dim]")
+        console.print("[dim]Press Ctrl+C to stop[/dim]")
+
+        import uvicorn
+        await uvicorn.Server(
+            uvicorn.Config(app, host=host, port=port, log_level="info")
+        ).serve()
+
+    try:
+        if transport == "stdio":
+            asyncio.run(run_stdio())
+        else:
+            asyncio.run(run_sse())
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Shutting down MCP server...[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error running MCP server: {e}[/red]")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+
+
 if __name__ == "__main__":
     main()

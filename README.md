@@ -9,9 +9,10 @@ Second Brain is a local-first, high-fidelity desktop memory system for macOS. It
 - **Continuous visual capture** – quartz-backed screenshots with app / window metadata and disk safeguards.
 - **GPT-5 vision OCR** – structured text extraction, semantic context, and batching with automatic retry & rate limiting.
 - **Search two ways** – trigram FTS5 for exact matches plus MiniLM-powered semantic search via Chroma.
+- **MCP Integration** – Model Context Protocol server exposes visual memory to AI tools (AGRO RAG engine, Claude Desktop, etc.).
 - **Timeline UI** – React + Vite single-page app for filtering, scrolling, and previewing captured sessions.
 - **Local API** – FastAPI server exposes `/api/frames`, `/api/apps`, and static `/frames/<path>` previews.
-- **Operational tooling** – CLI commands for start/stop/status/health, timeline launch, and service packaging (launchd script).
+- **Operational tooling** – CLI commands for start/stop/status/health, timeline launch, MCP server, and service packaging (launchd script).
 - **Privacy-first** – no outbound calls beyond OpenAI; configurable retention windows and storage quotas.
 
 ---
@@ -93,6 +94,7 @@ Command | Description
 `second-brain query "term" [--app com.apple.Safari] [--from YYYY-MM-DD] [--to YYYY-MM-DD]` | Full-text search (FTS5 + bm25).
 `second-brain query "term" --semantic` | Semantic search over GPT indexed embeddings (Chroma + MiniLM).
 `second-brain timeline [--host 127.0.0.1] [--port 8000] [--no-open]` | Run FastAPI + serve the timeline SPA (requires prior `npm run build`).
+`second-brain mcp [--transport stdio|sse] [--host 127.0.0.1] [--port 8100]` | Start MCP server to expose visual memory to AI tools (e.g., AGRO RAG engine).
 
 > Tip: Use `scripts/install.sh` to provision the virtualenv, install dependencies, build the package, and optionally register the launchd agent for auto-start on login.
 
@@ -156,6 +158,48 @@ Key config knobs (editable via `~/.config/second-brain/settings.json`):
 ```
 
 Adjust FPS to manage API costs, and tweak disk guardrails to suit your storage budget. The capture service keeps a rolling byte counter and will pause automatically if free space is scarce or the configured quota is exceeded.
+
+---
+
+## MCP Integration
+
+Second Brain exposes its visual memory through the **Model Context Protocol (MCP)**, enabling AI tools to query screenshots and OCR text alongside other data sources.
+
+### Starting the MCP Server
+
+```bash
+# For Claude Desktop (stdio transport)
+second-brain mcp --transport stdio
+
+# For HTTP clients like AGRO (SSE transport)
+second-brain mcp --transport sse --port 8100
+```
+
+### Available Tools
+
+- **search_memory** – Full-text search across OCR text with optional app/date filters
+- **get_frame_context** – Get complete details for a specific frame
+- **get_timeline** – Retrieve frames within a date range
+- **get_app_activity** – Get recent frames from a specific application
+- **get_usage_stats** – Overall statistics and top applications
+
+### Integration Examples
+
+**With AGRO RAG Engine:**
+See [`docs/AGRO_INTEGRATION.md`](docs/AGRO_INTEGRATION.md) for detailed setup and usage examples.
+
+**With Claude Desktop:**
+Add to your Claude Desktop MCP config:
+```json
+{
+  "mcpServers": {
+    "secondbrain": {
+      "command": "second-brain",
+      "args": ["mcp", "--transport", "stdio"]
+    }
+  }
+}
+```
 
 ---
 
