@@ -90,6 +90,28 @@ def create_app() -> FastAPI:
         stats = db.get_app_usage_stats(limit=limit)
         return {"apps": stats}
 
+    @app.get("/api/settings/ocr-engine")
+    def get_ocr_engine():
+        """Get current OCR engine setting."""
+        engine = config.get("ocr.engine", "openai")
+        return {"engine": engine}
+
+    @app.post("/api/settings/ocr-engine")
+    def set_ocr_engine(engine: str):
+        """Switch OCR engine on the fly.
+
+        Args:
+            engine: Either 'openai' or 'deepseek'
+        """
+        if engine not in ['openai', 'deepseek']:
+            raise HTTPException(status_code=400, detail="Invalid engine. Must be 'openai' or 'deepseek'")
+
+        # Update config and save it
+        config.set('ocr.engine', engine)
+        config.save()
+
+        return {"status": "ok", "engine": engine, "message": f"OCR engine switched to {engine}. Restart the capture service for changes to take effect."}
+
     ui_dist = (
         Path(__file__).resolve().parents[2] / "web" / "timeline" / "dist"
     )

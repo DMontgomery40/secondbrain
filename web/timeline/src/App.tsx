@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import dayjs from "dayjs";
@@ -26,6 +26,8 @@ type AppStat = {
   frame_count: number;
 };
 
+type OCREngine = "openai" | "deepseek";
+
 const fetchFrames = async (params: {
   app_bundle_id?: string | null;
   start?: number | null;
@@ -52,11 +54,83 @@ const fetchApps = async () => {
   return response.data.apps as AppStat[];
 };
 
+const fetchOCREngine = async (): Promise<OCREngine> => {
+  const response = await axios.get("/api/settings/ocr-engine");
+  return response.data.engine as OCREngine;
+};
+
+const setOCREngine = async (engine: OCREngine): Promise<void> => {
+  await axios.post("/api/settings/ocr-engine", null, {
+    params: { engine }
+  });
+};
+
 const formatTime = (timestamp: number) =>
   dayjs.unix(timestamp).format("HH:mm:ss");
 
 const formatDate = (timestamp: number) =>
   dayjs.unix(timestamp).format("YYYY-MM-DD");
+
+function OCREngineToggle() {
+  const [engine, setEngine] = useState<OCREngine>("openai");
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    // Get current engine on mount
+    fetchOCREngine().then(setEngine).catch(console.error);
+  }, []);
+
+  const handleToggle = async (newEngine: OCREngine) => {
+    if (newEngine === engine) return;
+
+    setIsLoading(true);
+    try {
+      await setOCREngine(newEngine);
+      setEngine(newEngine);
+    } catch (error) {
+      console.error("Failed to switch OCR engine:", error);
+      alert("Failed to switch OCR engine. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <section className="ocr-engine-toggle filter-card">
+      <h2>OCR Engine</h2>
+      <div className="toggle-buttons">
+        <button
+          className={engine === "openai" ? "active" : ""}
+          onClick={() => handleToggle("openai")}
+          disabled={isLoading}
+        >
+          OpenAI GPT-5
+        </button>
+        <button
+          className={engine === "deepseek" ? "active" : ""}
+          onClick={() => handleToggle("deepseek")}
+          disabled={isLoading}
+        >
+          DeepSeek OCR
+        </button>
+      </div>
+      <div className="engine-status">
+        <p>
+          <strong>Currently using:</strong> {engine}
+        </p>
+        {engine === "openai" && (
+          <p className="engine-warning">⚠️ Costs ~$0.01 per frame</p>
+        )}
+        {engine === "deepseek" && (
+          <p className="engine-info">✓ Free, runs locally</p>
+        )}
+        <p className="engine-note">
+          <small>Note: Restart capture service for changes to take effect</small>
+        </p>
+      </div>
+    </section>
+  );
+}
 
 export default function App() {
   const [appFilter, setAppFilter] = useState<string | null>(null);
@@ -157,6 +231,7 @@ export default function App() {
             />
           </label>
         </section>
+        <OCREngineToggle />
         <section className="details-card">
           <h2>Details</h2>
           {selectedFrame ? (

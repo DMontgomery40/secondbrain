@@ -89,9 +89,8 @@ def main():
 
 @main.command()
 @click.option("--fps", type=float, help="Frames per second to capture")
-@click.option("--ocr-engine", type=click.Choice(["openai", "deepseek", "hybrid"]), help="OCR engine to use")
-@click.option("--buffer-duration", type=int, help="Screenshot buffer duration in seconds (for deepseek/hybrid)")
-def start(fps: Optional[float], ocr_engine: Optional[str], buffer_duration: Optional[int]):
+@click.option("--ocr-engine", type=click.Choice(["openai", "deepseek"]), help="OCR engine to use (simple toggle, no hybrid)")
+def start(fps: Optional[float], ocr_engine: Optional[str]):
     """Start the capture service."""
     if is_running():
         console.print("[yellow]Service is already running[/yellow]")
@@ -106,16 +105,10 @@ def start(fps: Optional[float], ocr_engine: Optional[str], buffer_duration: Opti
     if fps:
         config.set("capture.fps", fps)
 
-    # Override OCR engine if provided
+    # Override OCR engine if provided (simple switch: openai or deepseek)
     if ocr_engine:
         config.set("ocr.engine", ocr_engine)
         console.print(f"[cyan]Using OCR engine: {ocr_engine}[/cyan]")
-
-        # Enable buffering for DeepSeek/hybrid if buffer duration specified
-        if buffer_duration and ocr_engine in ["deepseek", "hybrid"]:
-            config.set("ocr.buffer_enabled", True)
-            config.set("ocr.buffer_duration", buffer_duration)
-            console.print(f"[cyan]Screenshot buffering enabled: {buffer_duration}s[/cyan]")
     
     # Save PID
     save_pid()

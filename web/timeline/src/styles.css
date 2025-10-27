@@ -211,6 +211,74 @@ body {
   text-align: center;
 }
 
+/* OCR Engine Toggle Styles */
+.ocr-engine-toggle .toggle-buttons {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ocr-engine-toggle .toggle-buttons button {
+  flex: 1;
+  padding: 10px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 17, 25, 0.95);
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  border-radius: 10px;
+  transition: all 0.2s ease;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.ocr-engine-toggle .toggle-buttons button:hover:not(:disabled) {
+  border-color: rgba(105, 140, 255, 0.5);
+  background: rgba(20, 24, 33, 0.95);
+  transform: translateY(-1px);
+}
+
+.ocr-engine-toggle .toggle-buttons button.active {
+  background: rgba(105, 140, 255, 0.25);
+  border-color: rgba(105, 140, 255, 0.75);
+  color: rgb(232, 236, 240);
+  box-shadow: 0 4px 12px -8px rgba(99, 139, 255, 0.6);
+}
+
+.ocr-engine-toggle .toggle-buttons button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.ocr-engine-toggle .engine-status {
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+
+.ocr-engine-toggle .engine-status p {
+  margin: 6px 0;
+}
+
+.ocr-engine-toggle .engine-warning {
+  color: rgba(255, 180, 90, 0.9);
+  font-weight: 500;
+}
+
+.ocr-engine-toggle .engine-info {
+  color: rgba(120, 220, 140, 0.9);
+  font-weight: 500;
+}
+
+.ocr-engine-toggle .engine-note {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ocr-engine-toggle .engine-note small {
+  font-size: 0.8rem;
+}
+
 @media (max-width: 1100px) {
   .app-shell {
     grid-template-columns: 1fr;
