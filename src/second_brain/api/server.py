@@ -6,12 +6,21 @@ from datetime import datetime
 from pathlib import Path
 from typing import Generator, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
+import json
+import os
+import signal
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+from fastapi import Depends, FastAPI, HTTPException, Query, Body
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from ..config import Config
 from ..database import Database
+from .settings import router as settings_router
 
 config = Config()
 
@@ -31,6 +40,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Settings API
+    app.include_router(settings_router)
 
     frames_dir = config.get_frames_dir()
     frames_dir.mkdir(parents=True, exist_ok=True)
@@ -89,6 +101,65 @@ def create_app() -> FastAPI:
     def list_apps(limit: int = Query(50, ge=1, le=200), db: Database = Depends(get_db)):
         stats = db.get_app_usage_stats(limit=limit)
         return {"apps": stats}
+
+    def _get_pid_file() -> Path:
+        return (
+            Path.home()
+            / "Library"
+            / "Application Support"
+            / "second-brain"
+            / "second-brain.pid"
+        )
+
+    def _is_process_running(pid: int) -> bool:
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
+
+    def _restart_capture_service() -> None:
+        pid_file = _get_pid_file()
+        if pid_file.exists():
+            try:
+                pid = int(pid_file.read_text().strip())
+            except Exception:
+                pid = None  # type: ignore
+            if pid and _is_process_running(pid):
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                except OSError:
+                    pass
+                # Wait up to 10 seconds for shutdown
+                deadline = time.time() + 10
+                while time.time() < deadline:
+                    if not _is_process_running(pid):
+                        break
+                    time.sleep(0.2)
+
+        # Start the service again in background using the same venv
+        exe = Path(sys.executable).with_name("second-brain")
+        try:
+            subprocess.Popen([str(exe), "start"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            # As fallback, try system PATH
+            subprocess.Popen(["second-brain", "start"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    @app.get("/api/settings/ocr-engine")
+    def get_ocr_engine():
+        return {"engine": config.get("ocr.engine", "openai")}
+
+    @app.post("/api/settings/ocr-engine")
+    def set_ocr_engine(payload: dict = Body(...)):
+        engine = payload.get("engine") if isinstance(payload, dict) else None
+        if engine not in ("openai", "deepseek"):
+            raise HTTPException(status_code=400, detail="Invalid engine")
+        # Update config
+        config.set("ocr.engine", engine)
+        config.save()
+        # Restart capture service if running
+        _restart_capture_service()
+        return {"status": "ok", "engine": engine}
 
     ui_dist = (
         Path(__file__).resolve().parents[2] / "web" / "timeline" / "dist"

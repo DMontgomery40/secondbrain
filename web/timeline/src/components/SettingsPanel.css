@@ -1,0 +1,177 @@
+ .settings-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.settings-panel {
+  width: 800px;
+  max-height: 90vh;
+  background: white;
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  color: #222;
+}
+
+.settings-header {
+  padding: 20px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stats-bar {
+  padding: 10px 20px;
+  background: #f8f9fa;
+  display: flex;
+  gap: 20px;
+  font-size: 0.9em;
+  border-bottom: 1px solid #eee;
+}
+
+.status-ok { color: green; }
+.status-error { color: red; }
+
+.settings-tabs {
+  display: flex;
+  background: #f8f9fa;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.settings-tabs .tab {
+  padding: 10px 20px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-weight: 500;
+  color: #6c757d;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+}
+
+.settings-tabs .tab.active {
+  color: #007bff;
+  border-bottom-color: #007bff;
+}
+
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+.setting-row {
+  margin-bottom: 20px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.setting-row label {
+  flex: 1;
+  font-weight: 500;
+}
+
+.setting-row input[type="text"],
+.setting-row input[type="number"],
+.setting-row select {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+}
+
+.setting-row input[type="range"] {
+  flex: 2;
+}
+
+.setting-row .readonly {
+  background: #f8f9fa;
+  color: #6c757d;
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.indent { margin-left: 30px; }
+
+.hint {
+  font-size: 0.85em;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.danger-zone {
+  margin-top: 30px;
+  padding: 20px;
+  border: 2px solid #dc3545;
+  border-radius: 5px;
+  background: #f8d7da;
+}
+
+.danger-zone h4 {
+  color: #721c24;
+  margin-bottom: 10px;
+}
+
+.danger-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  margin-right: 10px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.settings-footer {
+  padding: 20px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.save-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.save-btn:disabled {
+  background: #6c757d;
+  cursor: not-allowed;
+}
+
+.cancel-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+}
+

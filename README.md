@@ -13,6 +13,7 @@ Second Brain is a local-first, high-fidelity desktop memory system for macOS. It
 - **Local API** – FastAPI server exposes `/api/frames`, `/api/apps`, and static `/frames/<path>` previews.
 - **Operational tooling** – CLI commands for start/stop/status/health, timeline launch, and service packaging (launchd script).
 - **Privacy-first** – no outbound calls beyond OpenAI; configurable retention windows and storage quotas.
+- **Manual OCR toggle + Settings Panel** – switch between OpenAI and local DeepSeek OCR, and configure everything from the GUI (no JSON editing).
 
 ---
 
@@ -93,6 +94,7 @@ Command | Description
 `second-brain query "term" [--app com.apple.Safari] [--from YYYY-MM-DD] [--to YYYY-MM-DD]` | Full-text search (FTS5 + bm25).
 `second-brain query "term" --semantic` | Semantic search over GPT indexed embeddings (Chroma + MiniLM).
 `second-brain timeline [--host 127.0.0.1] [--port 8000] [--no-open]` | Run FastAPI + serve the timeline SPA (requires prior `npm run build`).
+`second-brain mcp-server [--host 127.0.0.1] [--port 3000]` | Start the MCP server over HTTP with search and frame tools.
 
 > Tip: Use `scripts/install.sh` to provision the virtualenv, install dependencies, build the package, and optionally register the launchd agent for auto-start on login.
 
@@ -104,6 +106,7 @@ Command | Description
 - Build: `npm run build` → outputs to `web/timeline/dist/`
 - Serve: `second-brain timeline` mounts the built assets at `/` and exposes APIs under `/api` plus screenshots under `/frames`.
 - Features: application/date filters, horizontal scrubbable timeline by day, live screenshot preview, OCR text pane with block typing, responsive layout.
+- Settings: a gear button in the sidebar opens a full Settings Panel to adjust capture, OCR (engine toggle: OpenAI vs DeepSeek), embeddings, storage, API, logging, and MCP. Changes persist to disk; engine changes restart the capture service automatically.
 
 During development you can run `npm run dev` (proxying to the API at `localhost:8000`) instead of building.
 
@@ -121,6 +124,20 @@ Endpoint | Description
 
 All routes are local-only by default; CORS is wide open so the timeline SPA can hit the API.
 
+### Settings API
+
+Endpoint | Description
+---|---
+`GET /api/settings/ocr-engine` | Get current OCR engine (`openai` or `deepseek`).
+`POST /api/settings/ocr-engine` | Set OCR engine. Body: `{ "engine": "openai" | "deepseek" }`. Restarts capture if needed.
+`GET /api/settings/all` | Return all settings as nested JSON.
+`POST /api/settings/update` | Update any subset of settings; persists to disk and restarts services when required.
+`POST /api/settings/reset` | Reset a category or all. Body: `{ "category": "capture" | ... }` or empty to reset all.
+`GET /api/settings/stats` | Lightweight system stats for the Settings Panel (db size, screenshots, RAM, DeepSeek health, frames today).
+`POST /api/settings/maintenance/compact-db` | Vacuum the database.
+`POST /api/settings/maintenance/clear-screenshots` | Clear old screenshots and related records. Body: `{ "retention_days": 90 }`.
+`GET /api/settings/logs?file=capture.log` | Download a log file.
+
 ---
 
 ## Data & Configuration
@@ -134,23 +151,43 @@ All routes are local-only by default; CORS is wide open so the timeline SPA can 
 └── config/         # settings.json (auto-created copy of DEFAULT_CONFIG)
 ```
 
-Key config knobs (editable via `~/.config/second-brain/settings.json`):
+Configuration is persisted to `~/Library/Application Support/second-brain/config/settings.json` on macOS. You can manage everything from the Timeline UI Settings Panel; manual edits are still supported. Core keys include:
 
 ```json
 {
   "capture": {
     "fps": 1,
     "max_disk_usage_gb": 100,
-    "min_free_space_gb": 10
+    "min_free_space_gb": 10,
+    "buffer_enabled": false,
+    "buffer_duration": 30
   },
   "ocr": {
-    "engine": "openai",
+    "engine": "openai",            // or "deepseek"
     "model": "gpt-5",
-    "rate_limit_rpm": 50
+    "rate_limit_rpm": 50,
+    "deepseek_docker": true,
+    "deepseek_docker_url": "http://localhost:8001",
+    "batch_size": 5
   },
   "embeddings": {
     "enabled": true,
     "model": "sentence-transformers/all-MiniLM-L6-v2"
+  },
+  "api": {
+    "host": "127.0.0.1",
+    "port": 8000,
+    "cors_enabled": true
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "capture.log",
+    "max_size_mb": 100
+  },
+  "mcp": {
+    "enabled": false,
+    "port": 3000,
+    "transport": "streamable_http"
   }
 }
 ```
@@ -177,5 +214,6 @@ Formatting: the repo ships with `black`, `flake8`, and `mypy` in `requirements.t
 - Retention job for pruning old frames & embeddings.
 - Session reconstruction: auto-stitch contiguous frames into video clips.
 - Optional local LLM inference (llama.cpp) for offline semantic queries.
+- DeepSeek Docker helper and health UI integration.
 
 Contributions via pull requests are welcome. Please open an issue first if you plan large structural changes.

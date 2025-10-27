@@ -10,7 +10,7 @@ import structlog
 from ..capture import CaptureService
 from ..config import Config
 from ..database import Database
-from ..ocr import OpenAIOCR, DeepSeekOCR, HybridOCR
+from ..ocr import OpenAIOCR, DeepSeekOCR
 from ..embeddings import EmbeddingService
 
 logger = structlog.get_logger()
@@ -29,15 +29,10 @@ class ProcessingPipeline:
         
         # Initialize components
         self.capture_service = CaptureService(self.config)
-        # Select OCR engine
+        # Simple engine toggle: one or the other (no hybrid)
         ocr_engine = self.config.get("ocr.engine", "openai")
         if ocr_engine == "deepseek":
             self.ocr_service = DeepSeekOCR(self.config)
-        elif ocr_engine == "hybrid":
-            primary = DeepSeekOCR(self.config)
-            fallback = OpenAIOCR(self.config)
-            ratio = float(self.config.get("ocr.hybrid_ratio", 0.5) or 0.5)
-            self.ocr_service = HybridOCR(primary, fallback, ratio)
         else:
             self.ocr_service = OpenAIOCR(self.config)
         self.database = Database(config=self.config)

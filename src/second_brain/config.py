@@ -17,7 +17,7 @@ DEFAULT_CONFIG = {
         "buffer_duration": 30,
     },
     "ocr": {
-        "engine": "openai",  # openai | deepseek | hybrid
+        "engine": "openai",  # openai | deepseek
         "model": "gpt-5",
         "api_key_env": "OPENAI_API_KEY",
         "batch_size": 5,
@@ -28,16 +28,32 @@ DEFAULT_CONFIG = {
         # DeepSeek specific
         "deepseek_docker": True,
         "deepseek_docker_url": "http://localhost:8001",
-        "hybrid_ratio": 0.5,
+        "deepseek_mode": "optimal",
     },
     "storage": {
         "retention_days": 90,
         "compression": True,
+        "max_screenshots": 100000,
     },
     "embeddings": {
         "model": "sentence-transformers/all-MiniLM-L6-v2",
         "dimension": 384,
         "enabled": True,
+    },
+    "api": {
+        "host": "127.0.0.1",
+        "port": 8000,
+        "cors_enabled": True,
+    },
+    "logging": {
+        "level": "INFO",
+        "file": "capture.log",
+        "max_size_mb": 100,
+    },
+    "mcp": {
+        "enabled": False,
+        "port": 3000,
+        "transport": "streamable_http",
     },
     "context7": {
         "api_key": os.getenv("CONTEXT7_API_KEY", "ctx7sk-44085384-6ccc-4905-9c14-a5f723022f72"),
@@ -164,6 +180,17 @@ class Config:
         ]
         for directory in directories:
             directory.mkdir(parents=True, exist_ok=True)
+
+    # Reset helpers for settings panel
+    def reset_category(self, category: str) -> None:
+        if category not in DEFAULT_CONFIG:
+            raise KeyError(category)
+        self.config[category] = DEFAULT_CONFIG[category].copy() if isinstance(DEFAULT_CONFIG[category], dict) else DEFAULT_CONFIG[category]
+        self.save()
+
+    def reset_all(self) -> None:
+        self.config = DEFAULT_CONFIG.copy()
+        self.save()
 
 
 # Global config instance

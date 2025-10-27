@@ -431,14 +431,16 @@ def timeline(host: str, port: int, no_open: bool):
         console.print("\n[yellow]Shutting down timeline server...[/yellow]")
 
 
-@main.command()
-def mcp_server():
-    """Start MCP server on port 3000 (stub)."""
-    console.print("[green]Starting MCP server (stub)...[/green]")
+@main.command("mcp-server")
+@click.option("--host", default="127.0.0.1", show_default=True)
+@click.option("--port", default=3000, show_default=True, type=int)
+def mcp_server(host: str, port: int):
+    """Start MCP server on HTTP transport (default 127.0.0.1:3000)."""
+    console.print(f"[green]Starting MCP server at http://{host}:{port}...[/green]")
     server = SecondBrainMCPServer(None)
 
     async def run():
-        await server.run()
+        await server.run(host=host, port=port)
 
     try:
         asyncio.run(run())

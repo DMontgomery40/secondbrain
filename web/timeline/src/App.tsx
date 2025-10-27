@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import OCREngineToggle from "./components/OCREngineToggle";
+import { SettingsPanel } from "./components/SettingsPanel";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import dayjs from "dayjs";
@@ -59,6 +61,7 @@ const formatDate = (timestamp: number) =>
   dayjs.unix(timestamp).format("YYYY-MM-DD");
 
 export default function App() {
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [appFilter, setAppFilter] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
@@ -118,6 +121,10 @@ export default function App() {
     <div className="app-shell">
       <aside className="sidebar">
         <h1>Second Brain Timeline</h1>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <OCREngineToggle />
+          <button className="settings-button" onClick={() => setSettingsOpen(true)} title="Settings">⚙️ Settings</button>
+        </div>
         <section className="filter-card">
           <h2>Filters</h2>
           <label className="filter-field">
@@ -234,6 +241,7 @@ export default function App() {
           ))
         )}
       </main>
+      <SettingsPanel isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </div>
   );
 }

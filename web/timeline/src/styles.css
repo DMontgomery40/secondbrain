@@ -221,3 +221,55 @@ body {
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   }
 }
+
+/* OCR Engine Toggle styles */
+.ocr-engine-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: rgba(240, 240, 240, 0.08);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.toggle-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.toggle-buttons button {
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  border-radius: 6px;
+  color: inherit;
+}
+
+.toggle-buttons button.active {
+  background: #3a6bff;
+  color: white;
+  border-color: #3a6bff;
+}
+
+.engine-status {
+  margin-left: 10px;
+  font-size: 0.9em;
+  color: rgba(200, 207, 220, 0.85);
+}
+
+.error-text {
+  margin-left: 10px;
+  color: #ff6b6b;
+}
+
+/* Settings button */
+.settings-button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: inherit;
+  cursor: pointer;
+}
