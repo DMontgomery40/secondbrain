@@ -33,6 +33,10 @@ DEFAULT_CONFIG = {
         "dimension": 384,
         "enabled": True,
     },
+    "context7": {
+        "api_key": os.getenv("CONTEXT7_API_KEY", "ctx7sk-44085384-6ccc-4905-9c14-a5f723022f72"),
+        "enabled": True,
+    },
 }
 
 

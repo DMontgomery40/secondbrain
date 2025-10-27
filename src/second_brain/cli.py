@@ -21,6 +21,7 @@ from .config import Config
 from .database import Database
 from .pipeline import ProcessingPipeline
 from .embeddings import EmbeddingService
+from .context7_client import Context7Client
 
 # Load environment variables
 load_dotenv()
@@ -32,7 +33,6 @@ structlog.configure(
         structlog.processors.add_log_level,
         structlog.processors.JSONRenderer(),
     ],
-    wrapper_class=structlog.make_filtering_bound_logger(logging_level=20),
     context_class=dict,
     logger_factory=structlog.PrintLoggerFactory(),
     cache_logger_on_first_use=True,
@@ -428,6 +428,194 @@ def timeline(host: str, port: int, no_open: bool):
         asyncio.run(server.serve())
     except KeyboardInterrupt:
         console.print("\n[yellow]Shutting down timeline server...[/yellow]")
+
+
+@main.group()
+def docs():
+    """Fetch and manage library documentation using Context7."""
+    pass
+
+
+@docs.command("search")
+@click.argument("library_name")
+@click.option("--topic", help="Specific topic to focus on")
+@click.option("--tokens", default=5000, help="Maximum tokens to retrieve")
+@click.option("--save", type=click.Path(), help="Save documentation to file")
+def docs_search(library_name: str, topic: Optional[str], tokens: int, save: Optional[str]):
+    """Search for a library and fetch its documentation.
+    
+    Examples:
+        second-brain docs search "deepseek-ocr"
+        second-brain docs search "modelcontextprotocol python-sdk" --topic "server"
+        second-brain docs search "fastapi" --save fastapi-docs.md
+    """
+    config = Config()
+    
+    if not config.get("context7.enabled"):
+        console.print("[red]Context7 is disabled in configuration[/red]")
+        return
+    
+    api_key = config.get("context7.api_key")
+    if not api_key:
+        console.print("[red]Context7 API key not found. Set CONTEXT7_API_KEY env var or configure in settings[/red]")
+        return
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        progress.add_task(description=f"Searching for {library_name}...", total=None)
+        
+        with Context7Client(api_key) as client:
+            result = client.search_and_get_docs(library_name, topic, tokens)
+    
+    if not result:
+        console.print(f"[red]Could not find documentation for '{library_name}'[/red]")
+        return
+    
+    library = result["library"]
+    docs = result["documentation"]
+    
+    # Display library info
+    info_table = Table(title=f"Library: {library.get('name', library_name)}")
+    info_table.add_column("Property", style="cyan")
+    info_table.add_column("Value", style="green")
+    
+    info_table.add_row("ID", library.get("id", "N/A"))
+    info_table.add_row("Trust Score", str(library.get("trustScore", "N/A")))
+    info_table.add_row("Doc Length", f"{len(docs)} characters")
+    
+    console.print(info_table)
+    
+    # Save or display docs
+    if save:
+        save_path = Path(save)
+        save_path.write_text(docs)
+        console.print(f"\n[green]✓ Documentation saved to {save}[/green]")
+    else:
+        console.print("\n[cyan]Documentation Preview:[/cyan]")
+        preview = docs[:1000] + "..." if len(docs) > 1000 else docs
+        panel = Panel(
+            preview,
+            title="Documentation",
+            border_style="cyan",
+        )
+        console.print(panel)
+        console.print(f"\n[dim]Showing {min(1000, len(docs))} of {len(docs)} characters[/dim]")
+
+
+@docs.command("fetch")
+@click.argument("library_id")
+@click.option("--topic", help="Specific topic to focus on")
+@click.option("--tokens", default=5000, help="Maximum tokens to retrieve")
+@click.option("--save", type=click.Path(), help="Save documentation to file")
+def docs_fetch(library_id: str, topic: Optional[str], tokens: int, save: Optional[str]):
+    """Fetch documentation by exact library ID.
+    
+    Examples:
+        second-brain docs fetch "/deepseek-ai/deepseek-ocr"
+        second-brain docs fetch "/modelcontextprotocol/python-sdk" --topic "server"
+    """
+    config = Config()
+    
+    if not config.get("context7.enabled"):
+        console.print("[red]Context7 is disabled in configuration[/red]")
+        return
+    
+    api_key = config.get("context7.api_key")
+    if not api_key:
+        console.print("[red]Context7 API key not found[/red]")
+        return
+    
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        console=console,
+    ) as progress:
+        progress.add_task(description=f"Fetching docs for {library_id}...", total=None)
+        
+        with Context7Client(api_key) as client:
+            docs = client.get_docs(library_id, topic, tokens)
+    
+    if not docs:
+        console.print(f"[red]Could not fetch documentation for '{library_id}'[/red]")
+        return
+    
+    # Save or display docs
+    if save:
+        save_path = Path(save)
+        save_path.write_text(docs)
+        console.print(f"[green]✓ Documentation saved to {save}[/green]")
+    else:
+        console.print(f"[cyan]Documentation for {library_id}:[/cyan]")
+        preview = docs[:1000] + "..." if len(docs) > 1000 else docs
+        panel = Panel(
+            preview,
+            title="Documentation",
+            border_style="cyan",
+        )
+        console.print(panel)
+        console.print(f"\n[dim]Showing {min(1000, len(docs))} of {len(docs)} characters[/dim]")
+
+
+@docs.command("batch")
+@click.argument("libraries_file", type=click.Path(exists=True))
+@click.option("--output-dir", type=click.Path(), default="docs-output", help="Output directory for documentation files")
+@click.option("--tokens", default=5000, help="Maximum tokens per library")
+def docs_batch(libraries_file: str, output_dir: str, tokens: int):
+    """Fetch documentation for multiple libraries from a JSON file.
+    
+    The JSON file should contain an array of objects with 'name' and optional 'topic' keys:
+    [
+        {"name": "deepseek-ocr"},
+        {"name": "modelcontextprotocol python-sdk", "topic": "server"},
+        {"name": "fastapi", "topic": "routing"}
+    ]
+    """
+    config = Config()
+    
+    if not config.get("context7.enabled"):
+        console.print("[red]Context7 is disabled in configuration[/red]")
+        return
+    
+    api_key = config.get("context7.api_key")
+    if not api_key:
+        console.print("[red]Context7 API key not found[/red]")
+        return
+    
+    # Load libraries list
+    try:
+        with open(libraries_file, "r") as f:
+            libraries = json.load(f)
+    except Exception as e:
+        console.print(f"[red]Error reading libraries file: {e}[/red]")
+        return
+    
+    # Create output directory
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+    
+    console.print(f"[cyan]Fetching documentation for {len(libraries)} libraries...[/cyan]\n")
+    
+    with Context7Client(api_key) as client:
+        results = client.get_multiple_docs(libraries, tokens)
+    
+    # Save results
+    for result in results:
+        library = result["library"]
+        docs = result["documentation"]
+        
+        # Create safe filename from library ID
+        lib_id = library.get("id", library.get("name", "unknown"))
+        filename = lib_id.replace("/", "_").replace(" ", "-") + ".md"
+        filepath = output_path / filename
+        
+        filepath.write_text(docs)
+        console.print(f"[green]✓[/green] Saved {filename} ({len(docs)} chars)")
+    
+    console.print(f"\n[green]✓ Fetched {len(results)} of {len(libraries)} libraries[/green]")
+    console.print(f"[dim]Documentation saved to {output_dir}/[/dim]")
 
 
 if __name__ == "__main__":
