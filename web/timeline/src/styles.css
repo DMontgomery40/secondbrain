@@ -26,10 +26,38 @@ body {
   gap: 24px;
 }
 
+.sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
 .sidebar h1 {
   margin: 0;
   font-size: 1.5rem;
   font-weight: 600;
+  flex: 1;
+}
+
+.settings-button {
+  background: rgba(105, 140, 255, 0.15);
+  border: 1px solid rgba(105, 140, 255, 0.3);
+  color: rgba(105, 140, 255, 0.9);
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.settings-button:hover {
+  background: rgba(105, 140, 255, 0.25);
+  border-color: rgba(105, 140, 255, 0.5);
+  transform: translateY(-1px);
 }
 
 .filter-card,

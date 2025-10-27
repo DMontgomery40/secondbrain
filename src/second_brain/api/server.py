@@ -90,6 +90,96 @@ def create_app() -> FastAPI:
         stats = db.get_app_usage_stats(limit=limit)
         return {"apps": stats}
 
+    @app.get("/api/settings/all")
+    def get_all_settings():
+        """Get ALL settings as nested JSON."""
+        settings = config.get_all()
+
+        # Add computed paths
+        settings["_paths"] = {
+            "database": str(config.get_database_dir() / "memory.db"),
+            "screenshots": str(config.get_frames_dir()),
+            "embeddings": str(config.get_embeddings_dir()),
+            "logs": str(config.get_logs_dir()),
+            "config": str(config.config_path),
+        }
+
+        return settings
+
+    @app.post("/api/settings/update")
+    def update_settings(settings: dict):
+        """Update multiple settings at once.
+
+        Args:
+            settings: Nested dict of settings to update
+        """
+        # Flatten and update each setting
+        for category, values in settings.items():
+            if category.startswith("_"):
+                continue  # Skip special keys like _paths
+            if isinstance(values, dict):
+                for key, value in values.items():
+                    config.set(f"{category}.{key}", value)
+
+        # Save to file
+        config.save()
+
+        return {"status": "ok", "message": "Settings updated. Some changes may require service restart."}
+
+    @app.post("/api/settings/reset")
+    def reset_settings(category: str = None):
+        """Reset settings to defaults.
+
+        Args:
+            category: Category to reset (e.g., 'capture'), or None to reset all
+        """
+        if category:
+            config.reset_category(category)
+            return {"status": "ok", "message": f"Category '{category}' reset to defaults"}
+        else:
+            config.reset_all()
+            return {"status": "ok", "message": "All settings reset to defaults"}
+
+    @app.get("/api/settings/stats")
+    def get_system_stats(db: Database = Depends(get_db)):
+        """Get system statistics for display in settings."""
+        import psutil
+
+        # Get database stats
+        db_stats = db.get_database_stats()
+
+        # Get disk usage
+        frames_dir = config.get_frames_dir()
+        total_size = 0
+        screenshot_count = 0
+        if frames_dir.exists():
+            for item in frames_dir.rglob("*"):
+                if item.is_file():
+                    total_size += item.stat().st_size
+                    if item.suffix in ['.png', '.jpg', '.jpeg']:
+                        screenshot_count += 1
+
+        # Check DeepSeek Docker health
+        deepseek_running = False
+        try:
+            import requests
+            deepseek_url = config.get("ocr.deepseek_docker_url", "http://localhost:8001")
+            resp = requests.get(f"{deepseek_url}/health", timeout=2)
+            deepseek_running = resp.status_code == 200
+        except:
+            pass
+
+        return {
+            "database_size_mb": round(db_stats.get("database_size_bytes", 0) / (1024 * 1024), 2),
+            "screenshots_size_gb": round(total_size / (1024 * 1024 * 1024), 2),
+            "screenshot_count": screenshot_count,
+            "frames_in_db": db_stats.get("frame_count", 0),
+            "text_blocks": db_stats.get("text_block_count", 0),
+            "memory_usage_percent": round(psutil.virtual_memory().percent, 1),
+            "disk_free_gb": round(psutil.disk_usage(str(config.get_data_dir())).free / (1024 * 1024 * 1024), 2),
+            "deepseek_docker_running": deepseek_running,
+        }
+
     @app.get("/api/settings/ocr-engine")
     def get_ocr_engine():
         """Get current OCR engine setting."""

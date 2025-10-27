@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import dayjs from "dayjs";
+import { SettingsPanel } from "./components/SettingsPanel";
 
 type Frame = {
   frame_id: string;
@@ -137,6 +138,7 @@ export default function App() {
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const framesQuery = useQuery({
     queryKey: ["frames", appFilter, startDate, endDate],
@@ -191,7 +193,16 @@ export default function App() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <h1>Second Brain Timeline</h1>
+        <div className="sidebar-header">
+          <h1>Second Brain Timeline</h1>
+          <button
+            className="settings-button"
+            onClick={() => setSettingsOpen(true)}
+            title="Settings"
+          >
+            ⚙️
+          </button>
+        </div>
         <section className="filter-card">
           <h2>Filters</h2>
           <label className="filter-field">
@@ -309,6 +320,11 @@ export default function App() {
           ))
         )}
       </main>
+
+      <SettingsPanel
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }
