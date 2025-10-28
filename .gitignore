@@ -95,3 +95,23 @@ test_output/
 # Frontend artifacts
 web/timeline/node_modules/
 web/timeline/dist/
+
+# Additional envs, caches, and frontend logs
+.venv/
+.venv*/
+.python-version
+.direnv/
+.envrc
+.env.*
+.coverage.*
+coverage.xml
+.cache/
+.mypy_cache/
+.ruff_cache/
+.pytype/
+.ipynb_checkpoints/
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*

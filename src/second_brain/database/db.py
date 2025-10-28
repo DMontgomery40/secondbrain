@@ -270,6 +270,12 @@ class Database:
         Returns:
             List of search results with frame and text block data
         """
+        # Sanitize query for FTS5 - escape special characters
+        # FTS5 special chars: " AND OR NOT ()
+        sanitized_query = query.replace('"', '""')  # Escape quotes
+        sanitized_query = sanitized_query.replace("?", "")  # Remove question marks
+        sanitized_query = sanitized_query.replace("*", "")  # Remove wildcards
+        
         # Build query with filters
         sql = """
             SELECT 
@@ -293,7 +299,7 @@ class Database:
             WHERE text_blocks_fts MATCH ?
         """
         
-        params: List[Any] = [query]
+        params: List[Any] = [sanitized_query]
         
         if app_filter:
             sql += " AND f.app_bundle_id = ?"
@@ -314,7 +320,7 @@ class Database:
         cursor.execute(sql, params)
         
         results = [dict(row) for row in cursor.fetchall()]
-        logger.debug("text_search_completed", query=query, results=len(results))
+        logger.debug("text_search_completed", query=query, sanitized_query=sanitized_query, results=len(results))
         return results
 
     # Window tracking operations
