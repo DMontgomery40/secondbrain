@@ -34,7 +34,7 @@ class DeepSeekOCR:
         self.config = config or Config()
 
         # Configuration (MLX backend only)
-        self.model_id = self.config.get('ocr.deepseek_model', 'mlx-community/DeepSeek-OCR-4bit')
+        self.model_id = self.config.get('ocr.deepseek_model', 'mlx-community/DeepSeek-OCR-8bit')
         self.mode = self.config.get('ocr.deepseek_mode', 'optimal')
         self.max_retries = self.config.get('ocr.max_retries', 3)
         self.timeout = self.config.get('ocr.timeout_seconds', 30)
@@ -240,6 +240,9 @@ class DeepSeekOCR:
         # Load image
         try:
             image = Image.open(image_path)
+            # Convert RGBA to RGB to avoid channel mismatch errors with MLX
+            if image.mode == 'RGBA':
+                image = image.convert('RGB')
         except Exception as e:
             logger.error("image_loading_failed", path=str(image_path), error=str(e))
             return []
@@ -361,6 +364,10 @@ class DeepSeekOCR:
                 max_height=4096,
                 spacing=20
             )
+
+            # Convert RGBA to RGB to avoid channel mismatch errors with MLX
+            if combined_image.mode == 'RGBA':
+                combined_image = combined_image.convert('RGB')
 
             # Process combined image via MLX backend
             result = self._process_via_mlx(combined_image)

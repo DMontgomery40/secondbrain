@@ -4,7 +4,7 @@
 
 - macOS (required for screen capture APIs)
 - Python 3.11 or higher
-- OpenAI API key (for OpenAI OCR or OpenAI embeddings) OR use DeepSeek MLX backend (local)
+- OpenAI API key (optional, for embeddings or summarization)
 - Node.js 20 or higher (for building the timeline UI)
 
 ## Installation
@@ -18,8 +18,8 @@ cd /Users/gregcmartin/Desktop/Second\ Brain
 ### 2. Create Python Virtual Environment
 
 ```bash
-python3.11 -m venv venv
-source venv/bin/activate
+python3.11 -m venv .venv
+source .venv/bin/activate
 ```
 
 ### 3. Install Dependencies
@@ -56,13 +56,13 @@ cd ../..
 
 Create a `.env` file with your OpenAI API key if you plan to use OpenAI (OCR or embeddings). The system automatically loads it.
 
-To modify settings, edit `~/.config/second-brain/settings.json` or use the default configuration.
+To modify settings, edit `~/Library/Application Support/second-brain/config/settings.json` or use the default configuration.
 
 ### Default Configuration (key excerpts)
 
 You can edit these settings via:
 1. **Timeline UI Settings Panel (⚙️)** - Recommended, provides validation and live stats
-2. Manual edit: `~/.config/second-brain/settings.json`
+2. Manual edit: `~/Library/Application Support/second-brain/config/settings.json`
 
 ```json
 {
@@ -74,14 +74,11 @@ You can edit these settings via:
     "min_free_space_gb": 10
   },
   "ocr": {
-    "engine": "openai",              // "openai" or "deepseek"
-    "model": "gpt-5",
-    "api_key_env": "OPENAI_API_KEY",
+    "engine": "apple",              // "apple" (default) or "deepseek"
     "batch_size": 5,
     "max_retries": 3,
-    "rate_limit_rpm": 50,
-    "include_semantic_context": true,
     "timeout_seconds": 30,
+    "recognition_level": "accurate", // Apple Vision: "fast" or "accurate"
     // DeepSeek OCR settings (MLX backend only)
     "deepseek_mode": "optimal",      // tiny|small|base|large|optimal
     "deepseek_model": "mlx-community/DeepSeek-OCR-4bit",
@@ -100,16 +97,11 @@ You can edit these settings via:
     "openai_model": "text-embedding-3-small",
     "reranker_enabled": false,
     "reranker_model": "BAAI/bge-reranker-large"
-  },
-  "context7": {
-    "enabled": true,
-    "api_key": "",
-    "base_url": "https://api.context7.dev"
   }
 }
 ```
 
-> Note: GPT-5 vision is the only supported OCR model; overrides are ignored.
+> Note: OCR engines are Apple Vision (local, default) or DeepSeek (local MLX). No OpenAI OCR is required.
 
 ## Data Storage
 
@@ -140,7 +132,7 @@ After installation, you can use convenience scripts from the repo root:
 second-brain start
 
 # Or specify OCR engine on startup
-second-brain start --ocr-engine openai
+second-brain start --ocr-engine apple
 second-brain start --ocr-engine deepseek   # MLX backend (Apple Silicon only)
 
 # Adjust FPS for cost control
@@ -186,7 +178,7 @@ second-brain timeline --host 127.0.0.1 --port 8000
 ```
 
 The Timeline UI includes:
-- **OCR Engine Toggle**: Quick switch between OpenAI and DeepSeek in sidebar
+- **OCR Engine Toggle**: Quick switch between Apple Vision and DeepSeek in sidebar
 - **Settings Panel (⚙️)**: Comprehensive settings management with live stats
 - Application/date filters for focused search
 - Horizontal timeline scrubber grouped by day
@@ -222,15 +214,15 @@ second-brain stop
 
 ## Testing the OCR
 
-### Test OpenAI OCR
+### Test Apple Vision OCR
 
 ```python
 import asyncio
 from pathlib import Path
-from second_brain.ocr.openai_ocr import OpenAIOCR
+from second_brain.ocr.apple_vision_ocr import AppleVisionOCR
 
-async def test_openai():
-    ocr = OpenAIOCR()
+async def test_apple():
+    ocr = AppleVisionOCR()
 
     # Take a test screenshot
     import subprocess
@@ -247,7 +239,7 @@ async def test_openai():
         if 'semantic_context' in block:
             print(f"Context: {block['semantic_context']}")
 
-asyncio.run(test_openai())
+asyncio.run(test_apple())
 ```
 
 ### Test DeepSeek OCR
@@ -325,7 +317,7 @@ Based on 1 fps capture rate:
 - 10-20x compression via batch processing
 - Slightly lower accuracy than GPT-5, but excellent for most use cases
 
-**Recommendation:** Start with DeepSeek for cost-free operation. Switch to OpenAI for sessions requiring maximum accuracy or semantic context extraction.
+**Recommendation:** Start with Apple Vision (default) for a fast, private local setup. Switch to DeepSeek for large-batch local OCR and cost-free operation.
 
 Adjust `capture.fps` and `ocr.engine` in configuration to balance costs and quality.
 
@@ -441,48 +433,7 @@ second-brain start --embeddings-provider sbert --embeddings-model sentence-trans
 second-brain start --embeddings-provider openai --openai-emb-model text-embedding-3-small --enable-reranker
 ```
 
-## Advanced: Context7 Integration
-
-Second Brain can fetch documentation for libraries on-demand via Context7:
-
-### Setup
-
-1. Get a Context7 API key from https://context7.dev
-2. Configure via Settings Panel (⚙️) → Context7 tab
-3. Or edit config:
-```json
-{
-  "context7": {
-    "enabled": true,
-    "api_key": "ctx7sk-..."
-  }
-}
-```
-
-### Usage
-
-```bash
-# Search for library documentation
-second-brain docs search "react" --save react.md
-
-# Fetch specific library by ID
-second-brain docs fetch "/facebook/react" --topic "hooks"
-
-# Batch fetch multiple libraries
-second-brain docs batch libraries.json --output-dir docs/
-```
-
-Where `libraries.json` contains:
-```json
-{
-  "libraries": [
-    {"id": "/facebook/react", "topic": "hooks"},
-    {"id": "/python/fastapi", "topic": "async"}
-  ]
-}
-```
-
----
+ 
 
 ## Summary
 
@@ -491,7 +442,7 @@ You now have a complete Second Brain setup with:
 - ✅ Comprehensive settings management via GUI
 - ✅ MCP server for AI assistant integration
 - ✅ Timeline UI for visual exploration
-- ✅ Optional Context7 documentation fetching
+ 
 
 **Next steps:**
 1. Choose your OCR engine (DeepSeek for free, OpenAI for max accuracy)

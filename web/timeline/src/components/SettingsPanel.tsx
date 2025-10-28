@@ -40,10 +40,6 @@ interface Settings {
     reranker_enabled?: boolean;
     reranker_model?: string;
   };
-  context7: {
-    api_key: string;
-    enabled: boolean;
-  };
   _paths?: {
     database: string;
     screenshots: string;
@@ -521,36 +517,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             </div>
           )}
 
-          {/* CONTEXT7 SETTINGS */}
-          {activeTab === 'context7' && (
-            <div className="settings-section">
-              <h3>Context7 Settings</h3>
-
-              <div className="setting-row">
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={settings.context7.enabled}
-                    onChange={(e) => updateSetting('context7', 'enabled', e.target.checked)}
-                  />
-                  Enable Context7 Integration
-                </label>
-              </div>
-
-              <div className="setting-row">
-                <label>API Key</label>
-                <input
-                  type="password"
-                  value={settings.context7.api_key}
-                  onChange={(e) => updateSetting('context7', 'api_key', e.target.value)}
-                  disabled={!settings.context7.enabled}
-                  placeholder="ctx7sk-..."
-                />
-              </div>
-
-              <button className="reset-btn" onClick={() => resetCategory('context7')}>Reset to Defaults</button>
-            </div>
-          )}
+          
         </div>
 
         <div className="settings-footer">

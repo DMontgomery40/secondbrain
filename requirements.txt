@@ -45,7 +45,7 @@ mypy==1.7.1
 # Logging
 structlog==23.2.0
 
-# MCP server and Context7 (AI assistant integration + docs)
+# MCP server (AI assistant integration)
 mcp>=1.19.0
 httpx>=0.28.1
 requests>=2.32.5

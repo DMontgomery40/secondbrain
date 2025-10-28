@@ -15,6 +15,8 @@ ENHANCE existing macOS secondbrain (GPT-5 OCR → SQLite/Chroma → Timeline UI)
 - **MCP**: `/websites/modelcontextprotocol_io_specification`
 - **DeepSeek OCR**: `/deepseek-ai/deepseek-ocr`
 - **MCP Python SDK**: `/modelcontextprotocol/python-sdk`
+  
+Note: Context7 is recommended for agent workflows but is not integrated into the runtime codebase.
 
 ## KEY EXISTING TYPES TO MATCH
 ```python
@@ -126,7 +128,7 @@ second-brain start              # Respects config.ocr.engine
 # New commands
 second-brain start --ocr-engine deepseek
 second-brain mcp-server        # Start MCP server via stdio
-second-brain docs search "lib"  # Context7 documentation fetching
+# Context7-based docs commands have been removed from the CLI
 ```
 
 ## FILE CHANGES SUMMARY

@@ -126,7 +126,7 @@ second-brain start              # Respects config.ocr.engine
 # New commands
 second-brain start --ocr-engine deepseek
 second-brain mcp-server        # Start MCP server via stdio
-second-brain docs search "lib"  # Context7 documentation fetching
+# Docs fetching via Context7 is not part of the runtime codebase; use external tools as needed
 ```
 
 ## FILE CHANGES SUMMARY

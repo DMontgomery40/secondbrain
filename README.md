@@ -37,7 +37,6 @@ Second Brain is a local-first, high-fidelity desktop memory system for macOS. It
 - ✨ DeepSeek OCR integration (10-20x cost reduction, runs locally)
 - ✨ Comprehensive settings panel (30+ configurable options)
 - ✨ MCP server for AI assistant integration
-- ✨ Context7 integration for documentation fetching
 - ✨ Image combination for batch processing
   
   DeepSeek OCR runs locally using the MLX backend (Apple Silicon) with the Hugging Face model `mlx-community/DeepSeek-OCR-4bit`.
@@ -142,9 +141,6 @@ Command | Description
 `second-brain query "term" --semantic [--rerank]` | Semantic search over embeddings (provider-configured), optionally reranked.
 `second-brain timeline [--host 127.0.0.1] [--port 8000] [--no-open]` | Run FastAPI + serve Timeline UI with settings panel.
 `second-brain mcp-server` | Start MCP server to expose memory to AI assistants.
-`second-brain docs search "library-name" [--save path.md]` | Fetch documentation via Context7.
-`second-brain docs fetch "/library-id" [--topic "..."]` | Fetch docs by exact library ID.
-`second-brain docs batch libraries.json --output-dir docs/` | Batch fetch multiple libraries.
 
 > Tip: Use `scripts/install.sh` to provision the virtualenv, install dependencies, build the package, and optionally register the launchd agent for auto-start on login.
 
@@ -214,7 +210,7 @@ Example config overrides in `settings.json`:
 - Inline in sidebar for easy access
 
 **Comprehensive Settings Panel (⚙️):**
-- **5 tabbed categories:** Capture, OCR, Storage, Embeddings, Context7
+- **4 tabbed categories:** Capture, OCR, Storage, Embeddings
 - **30+ configurable options:** FPS, image quality, disk limits, OCR models, rate limits, retention, etc.
   - **Live system statistics:** Database size, screenshot count, RAM usage, disk space
 - **Save/Reset functionality:** Per-category or global reset to defaults
@@ -291,10 +287,7 @@ All settings are now manageable via the **Timeline UI Settings Panel (⚙️)** 
     "enabled": true,
     "model": "sentence-transformers/all-MiniLM-L6-v2"
   },
-  "context7": {
-    "enabled": true,
-    "api_key": "ctx7sk-..."
-  }
+  
 }
 ```
 
@@ -379,7 +372,7 @@ DeepSeek performance varies by mode (tiny/small/base/large/optimal) - adjustable
 - ✅ DeepSeek OCR integration (10-20x cost reduction)
 - ✅ Comprehensive settings panel (30+ options)
 - ✅ MCP server for AI assistant integration
-- ✅ Context7 integration for documentation
+ 
 - ✅ Dual OCR engine support with GUI toggle
 
 **Planned:**
