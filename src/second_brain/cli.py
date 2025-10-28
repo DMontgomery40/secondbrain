@@ -21,6 +21,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from .config import Config
 from .database import Database
 from .pipeline import ProcessingPipeline
+from .context7_client import Context7Client
 # Lazy import EmbeddingService only when needed to avoid heavy deps at startup
 
 # Load environment variables

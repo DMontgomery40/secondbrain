@@ -175,7 +175,6 @@ class ProcessingPipeline:
                                             frame_id=metadata["frame_id"],
                                             error=error_str,
                                         )
-                                    )
                         
                         # Update window tracking
                         self.database.update_window_tracking(
