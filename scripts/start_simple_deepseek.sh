@@ -1,5 +1,5 @@
 #!/bin/bash
-# Simple startup using DeepSeek OCR via local MLX backend (Apple Silicon)
+# Simple startup using DeepSeek OCR via MLX (Apple Silicon, 3.85 GB download on first run)
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -13,6 +13,7 @@ fi
 
 source "$VENV_DIR/bin/activate"
 
-echo "Starting Second Brain (DeepSeek MLX, simple defaults)..."
-exec second-brain start --ocr-engine deepseek --deepseek-backend mlx
+echo "Starting Second Brain (DeepSeek OCR - local, multimodal)..."
+echo "Note: mlx-community/DeepSeek-OCR-8bit (3.85 GB) will download on first run"
+exec second-brain start --ocr-engine deepseek
 

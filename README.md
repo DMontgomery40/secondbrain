@@ -13,7 +13,6 @@ Second Brain is a local-first, high-fidelity desktop memory system for macOS. It
 - **Timeline UI** – React + Vite SPA with filters, OCR engine toggle, complete settings management, and session replay.
 - **MCP server** – Model Context Protocol server exposes your memory to AI assistants (Claude, ChatGPT, etc.) via 5 tools.
 - **Local API** – FastAPI server with comprehensive endpoints for frames, apps, settings, and system stats.
-- **Context7 integration** – Fetch latest library documentation on-demand via CLI.
 - **Operational tooling** – CLI commands for start/stop/status/health, timeline launch, MCP server, and service packaging.
 - **Privacy-first** – no outbound calls beyond chosen OCR provider; configurable retention windows and storage quotas.
 

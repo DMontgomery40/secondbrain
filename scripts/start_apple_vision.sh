@@ -1,5 +1,5 @@
 #!/bin/bash
-# Original simple startup using OpenAI GPT-5 Vision OCR
+# Simple startup using Apple Vision OCR (local, free, fast)
 set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
@@ -13,10 +13,6 @@ fi
 
 source "$VENV_DIR/bin/activate"
 
-if [[ -z "${OPENAI_API_KEY:-}" ]]; then
-  echo "⚠️  OPENAI_API_KEY is not set. Export it or add to .env before running." >&2
-fi
-
-echo "Starting Second Brain (OpenAI GPT-5, simple defaults)..."
-exec second-brain start --ocr-engine openai
+echo "Starting Second Brain (Apple Vision OCR - local, free, fast)..."
+exec second-brain start --ocr-engine apple
 
