@@ -159,14 +159,22 @@ class ProcessingPipeline:
                         if text_blocks:
                             self.database.insert_text_blocks(text_blocks)
                             # Index embeddings after successful DB write
+                            # Index embeddings after successful DB write
                             if self.embedding_service:
                                 try:
                                     self.embedding_service.index_text_blocks(metadata, text_blocks)
                                 except Exception as embed_error:
-                                    logger.error(
-                                        "embedding_index_failed",
-                                        frame_id=metadata["frame_id"],
-                                        error=str(embed_error),
+                                    # Only log as error if it's not a known compatibility issue
+                                    error_str = str(embed_error)
+                                    if "cached_download" in error_str or "url" in error_str:
+                                        # Silently skip embedding for compatibility issues
+                                        pass
+                                    else:
+                                        logger.error(
+                                            "embedding_index_failed",
+                                            frame_id=metadata["frame_id"],
+                                            error=error_str,
+                                        )
                                     )
                         
                         # Update window tracking
