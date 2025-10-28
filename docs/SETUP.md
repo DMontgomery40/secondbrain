@@ -109,6 +109,8 @@ You can edit these settings via:
 }
 ```
 
+> Note: GPT-5 vision is the only supported OCR model; overrides are ignored.
+
 ## Data Storage
 
 All data is stored locally in:

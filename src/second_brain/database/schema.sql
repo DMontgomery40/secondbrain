@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS text_blocks (
     frame_id TEXT NOT NULL,
     text TEXT NOT NULL,
     normalized_text TEXT,
+    text_compressed BLOB,  -- zlib compressed text for storage efficiency
     confidence REAL,
     bbox_x INTEGER,
     bbox_y INTEGER,
@@ -76,11 +77,27 @@ CREATE INDEX IF NOT EXISTS idx_text_blocks_confidence ON text_blocks(confidence)
 CREATE INDEX IF NOT EXISTS idx_windows_app ON windows(app_bundle_id);
 CREATE INDEX IF NOT EXISTS idx_windows_last_seen ON windows(last_seen);
 
+-- AI-generated summaries of activity
+CREATE TABLE IF NOT EXISTS summaries (
+    summary_id TEXT PRIMARY KEY,
+    start_timestamp INTEGER NOT NULL,
+    end_timestamp INTEGER NOT NULL,
+    summary_type TEXT NOT NULL,  -- 'hourly', 'daily', 'session'
+    summary_text TEXT NOT NULL,
+    frame_count INTEGER,
+    app_names TEXT,  -- JSON array of apps used
+    created_at INTEGER DEFAULT (strftime('%s', 'now'))
+);
+
+-- Indexes for summaries
+CREATE INDEX IF NOT EXISTS idx_summaries_start ON summaries(start_timestamp);
+CREATE INDEX IF NOT EXISTS idx_summaries_type ON summaries(summary_type);
+
 -- Metadata table for schema versioning
 CREATE TABLE IF NOT EXISTS metadata (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO metadata (key, value) VALUES ('schema_version', '1');
+INSERT OR IGNORE INTO metadata (key, value) VALUES ('schema_version', '2');
 INSERT OR IGNORE INTO metadata (key, value) VALUES ('created_at', strftime('%s', 'now'));

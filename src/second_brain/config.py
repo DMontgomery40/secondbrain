@@ -15,22 +15,25 @@ DEFAULT_CONFIG = {
         "min_free_space_gb": 10,
     },
     "ocr": {
-        "engine": "openai",
-        "model": "gpt-5",
-        "api_key_env": "OPENAI_API_KEY",
+        "engine": "apple",  # apple (local/free, default) or deepseek (local/free/cutting-edge)
         "batch_size": 5,
         "max_retries": 3,
-        "rate_limit_rpm": 50,
-        "include_semantic_context": True,
         "timeout_seconds": 30,
-        "buffer_enabled": False,
-        "buffer_duration": 30,
-        "buffer_min_size": 10,
-        # DeepSeek OCR settings (MLX backend only)
-        "deepseek_mode": "optimal",
-        "deepseek_model": "mlx-community/DeepSeek-OCR-4bit",
-        "mlx_max_tokens": 1200,
-        "mlx_temperature": 0.0,
+        # Apple Vision OCR settings
+        "recognition_level": "accurate",  # "fast" or "accurate"
+        # DeepSeek OCR settings (MLX-VLM)
+        "deepseek_mode": "small",  # tiny|small|base|large|gundam (small=640x640, 100 tokens recommended)
+        "deepseek_model": "mlx-community/DeepSeek-OCR-8bit",  # 3.85 GB download on first use
+        "deepseek_prompt": "<image>\n<|grounding|>Convert the document to markdown.",
+    },
+    "summarization": {
+        "enabled": True,  # AI-powered activity summarization
+        "provider": "openai",  # openai, ollama, or any OpenAI-compatible API
+        "model_name": "gpt-5-medium",  # Model to use for summaries
+        "api_base_url": "https://api.openai.com/v1",  # Base URL (Ollama: http://localhost:11434/v1)
+        "api_key_env": "OPENAI_API_KEY",  # Environment variable name for API key
+        "rate_limit_rpm": 50,
+        "interval_minutes": 60,
     },
     "storage": {
         "retention_days": 90,
@@ -38,19 +41,12 @@ DEFAULT_CONFIG = {
     },
     "embeddings": {
         "enabled": True,
-        # Provider: 'sbert' (SentenceTransformers) or 'openai'
-        "provider": "sbert",
-        # SBERT model for embeddings
+        "provider": "sbert",  # 'sbert' (local) or 'openai' (cloud)
         "model": "sentence-transformers/all-MiniLM-L6-v2",
-        # OpenAI embeddings model when provider='openai'
         "openai_model": "text-embedding-3-small",
-        # Optional reranker using BAAI bge reranker
-        "reranker_enabled": False,
-        "reranker_model": "BAAI/bge-reranker-large",
-    },
-    "context7": {
-        "api_key": os.getenv("CONTEXT7_API_KEY", "ctx7sk-44085384-6ccc-4905-9c14-a5f723022f72"),
-        "enabled": True,
+        # Local reranker for improved search relevance
+        "reranker_enabled": True,
+        "reranker_model": "BAAI/bge-reranker-large",  # 2.24 GB download on first use
     },
 }
 

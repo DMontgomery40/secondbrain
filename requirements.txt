@@ -6,15 +6,16 @@ click==8.1.7
 rich==13.7.0
 
 # OpenAI API
-openai==1.12.0
+openai==2.6.1
 
 # API server
 fastapi>=0.110.0
 uvicorn[standard]>=0.25.0
 
-# macOS APIs for screen capture and window metadata
-pyobjc-framework-Quartz==10.1  # Screen capture
-pyobjc-framework-Cocoa==10.1   # macOS APIs
+# macOS APIs for screen capture, window metadata, and Vision OCR
+pyobjc-framework-Quartz==12.0  # Screen capture
+pyobjc-framework-Cocoa==12.0   # macOS APIs
+pyobjc-framework-Vision==12.0  # Local OCR (Apple Vision framework)
 
 # Database
 sqlite-utils==3.36
@@ -44,14 +45,23 @@ mypy==1.7.1
 # Logging
 structlog==23.2.0
 
-# MCP and Context7
+# MCP server and Context7 (AI assistant integration + docs)
 mcp>=1.19.0
-httpx>=0.28.0
+httpx>=0.28.1
+requests>=2.32.5
 
-# Image processing for DeepSeek OCR
-Pillow>=10.3.0
-requests==2.31.0
+# Image processing (frame diffing + DeepSeek batch OCR)
+Pillow==12.0.0
+imagehash==4.3.2
 
-# Local MLX VLM backend for DeepSeek OCR (Apple Silicon)
-# Install only if running on macOS/arm64; safe to include as optional runtime dep
-mlx-vlm>=0.3.4
+# Local MLX VLM backend for DeepSeek OCR (Apple Silicon) - YOUR NEW FEATURE
+# DeepSeek OCR = 10-20x cost reduction vs cloud
+mlx-vlm>=0.3.5
+
+# Video encoding (H.264/HEVC hardware-accelerated compression)
+pyobjc-framework-AVFoundation==12.0
+pyobjc-framework-CoreMedia==12.0
+pyobjc-framework-VideoToolbox==12.0  # For HEVC/H.265 hardware encoding
+
+# UI (Streamlit for real-time monitoring)
+streamlit==1.40.2

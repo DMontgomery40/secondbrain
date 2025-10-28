@@ -11,7 +11,8 @@ from ..capture import CaptureService
 from ..capture.screenshot_buffer import ScreenshotBuffer
 from ..config import Config
 from ..database import Database
-from ..ocr import OpenAIOCR, DeepSeekOCR
+from ..ocr import AppleVisionOCR, DeepSeekOCR
+from ..summarization import SummarizationService
 # Lazy import EmbeddingService to avoid importing heavy deps unless enabled
 
 logger = structlog.get_logger()
@@ -31,15 +32,16 @@ class ProcessingPipeline:
         # Initialize components
         self.capture_service = CaptureService(self.config)
 
-        # Simple OCR engine selection - one or the other, no hybrid
-        ocr_engine = self.config.get("ocr.engine", "openai")
+        # Simple OCR engine selection - 100% local options!
+        ocr_engine = self.config.get("ocr.engine", "apple")
         logger.info("initializing_ocr_engine", engine=ocr_engine)
 
         if ocr_engine == "deepseek":
+            # DeepSeek: Local, free, cutting-edge multimodal OCR
             self.ocr_service = DeepSeekOCR(self.config)
         else:
-            # Default to OpenAI for any other value (including 'openai', 'hybrid', etc.)
-            self.ocr_service = OpenAIOCR(self.config)
+            # Apple Vision: Local, free, fast, built-in (DEFAULT)
+            self.ocr_service = AppleVisionOCR(self.config)
 
         self.database = Database(config=self.config)
         # Initialize embeddings lazily and only if enabled in config
@@ -56,6 +58,13 @@ class ProcessingPipeline:
         # No screenshot buffering - keep it simple
         self.screenshot_buffer = None
         
+        # Initialize summarization service (optional - requires API key)
+        self.summarization_service: Optional[SummarizationService] = None
+        try:
+            self.summarization_service = SummarizationService(self.config)
+        except ValueError as e:
+            logger.warning("summarization_service_disabled", reason=str(e))
+        
         # OCR queue
         self.ocr_queue: deque = deque()
         self.batch_size = self.config.get("ocr.batch_size", 5)
@@ -64,6 +73,7 @@ class ProcessingPipeline:
         self.running = False
         self.ocr_task: Optional[asyncio.Task] = None
         self.capture_task: Optional[asyncio.Task] = None
+        self.summarization_task: Optional[asyncio.Task] = None
         
         # Statistics
         self.stats = {
@@ -201,6 +211,13 @@ class ProcessingPipeline:
         self.capture_task = asyncio.create_task(self._capture_loop())
         self.ocr_task = asyncio.create_task(self._ocr_loop())
         
+        # Start summarization loop if enabled
+        if self.summarization_service:
+            self.summarization_task = asyncio.create_task(
+                self.summarization_service.summarization_loop(self.database)
+            )
+            logger.info("summarization_loop_started")
+        
         logger.info("processing_pipeline_started")
 
     async def stop(self):
@@ -212,6 +229,10 @@ class ProcessingPipeline:
         logger.info("stopping_processing_pipeline")
         self.running = False
         
+        # Stop summarization service
+        if self.summarization_service:
+            self.summarization_service.stop()
+        
         # Wait for tasks to complete
         if self.capture_task:
             await self.capture_task
@@ -219,6 +240,21 @@ class ProcessingPipeline:
         if self.ocr_task:
             await self.ocr_task
         
+        if self.summarization_task:
+            await self.summarization_task
+
+        # Close services
+        try:
+            await self.ocr_service.close()
+        except Exception as error:
+            logger.warning("ocr_service_close_failed", error=str(error))
+        
+        if self.summarization_service:
+            try:
+                await self.summarization_service.close()
+            except Exception as error:
+                logger.warning("summarization_service_close_failed", error=str(error))
+
         # Close database
         self.database.close()
         

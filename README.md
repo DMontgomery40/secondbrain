@@ -1,13 +1,13 @@
 # Second Brain
 
-Second Brain is a local-first, high-fidelity desktop memory system for macOS. It captures your screen at 1–2 fps, extracts rich text and context with dual OCR engines (GPT-5 or DeepSeek), indexes everything for instant recall, and ships with an elegant timeline UI with comprehensive settings panel. All data (screenshots, metadata, embeddings, logs) stays on disk in a predictable directory so you maintain full control.
+Second Brain is a local-first, high-fidelity desktop memory system for macOS. It captures your screen at 1–2 fps, extracts rich text and context with dual OCR engines (Apple Vision or DeepSeek), indexes everything for instant recall, and ships with an elegant timeline UI with comprehensive settings panel. All data (screenshots, metadata, embeddings, logs) stays on disk in a predictable directory so you maintain full control.
 
 ---
 
 ## Highlights
 
 - **Continuous visual capture** – quartz-backed screenshots with app / window metadata and disk safeguards.
-- **Dual OCR engines** – Choose between GPT-5 vision (accurate, costs ~$0.01/frame) or DeepSeek OCR (free, local, 10-20x compression). Switch engines anytime via GUI or CLI.
+- **Dual OCR engines** – Apple Vision (local, fast, free) or DeepSeek OCR (local, multimodal, 10-20x compression). Switch engines anytime via GUI or CLI.
 - **Comprehensive settings panel** – Beautiful GUI for all 30+ configuration options with live system statistics. No more manual JSON editing!
 - **Search two ways** – trigram FTS5 for exact matches plus MiniLM-powered semantic search via Chroma.
 - **Timeline UI** – React + Vite SPA with filters, OCR engine toggle, complete settings management, and session replay.
@@ -47,12 +47,29 @@ Second Brain is a local-first, high-fidelity desktop memory system for macOS. It
 
 ## Quick Start
 
-### Prerequisites
+### System Requirements
 
-- macOS with Screen Recording + Accessibility permissions enabled for your terminal and Python
+**Minimum (Apple Vision OCR):**
+- Apple Silicon M1+
+- 8 GB RAM
+- 50 GB free disk space
+- macOS 15+ (Sequoia)
+
+**Recommended (DeepSeek OCR + Reranker - default):**
+- Apple Silicon M1/M2/M3/M4
+- 16 GB RAM (24 GB+ recommended)
+- 100 GB free disk space
+- macOS 15+ (Sequoia)
+
+**Model Downloads (first run):**
+- DeepSeek-OCR-8bit: 3.85 GB
+- BAAI/bge-reranker-large: 2.24 GB
+- Total: ~6.1 GB
+
+**Software:**
 - Python 3.11+
-- Node.js 20+ (for building the timeline UI)
-- OpenAI API key (for OpenAI OCR or OpenAI embeddings), optional if using only DeepSeek MLX
+- Node.js 20+
+- Screen Recording + Accessibility permissions
 
 ### Setup
 
@@ -282,9 +299,14 @@ All settings are now manageable via the **Timeline UI Settings Panel (⚙️)** 
 }
 ```
 
-**Pro tip:** Use the Settings Panel in Timeline UI instead of manual JSON editing! It provides validation, hints, and shows current system stats.
+**Smart Capture:**
+- Adaptive FPS: 1.0 fps (active) → 0.2 fps (idle >30s) based on keyboard/mouse activity
+- Frame diffing: Perceptual hashing skips duplicates (95% similarity threshold)
+- Disk monitoring: Auto-pauses if free space is scarce or quota exceeded
 
-The capture service monitors disk usage and will pause automatically if free space is scarce or the configured quota is exceeded.
+**100% Local by Default:**
+- Apple Vision OCR (on-device, free, fast) or DeepSeek OCR (MLX, cutting-edge multimodal)
+- No cloud dependencies required
 
 ---
 
@@ -319,11 +341,6 @@ second-brain mcp-server
   }
 }
 ```
-
-Now your AI assistant can query your visual memory:
-- "What was I working on yesterday afternoon?"
-- "Find screenshots where I was using VS Code"
-- "Show me my browser activity from last Tuesday"
 
 ---
 

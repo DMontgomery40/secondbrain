@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 import click
+import psutil
 import structlog
 from dotenv import load_dotenv
 from rich.console import Console
@@ -21,7 +22,6 @@ from .config import Config
 from .database import Database
 from .pipeline import ProcessingPipeline
 # Lazy import EmbeddingService only when needed to avoid heavy deps at startup
-from .context7_client import Context7Client
 
 # Load environment variables
 load_dotenv()
@@ -47,20 +47,40 @@ def get_pid_file() -> Path:
     return Path.home() / "Library" / "Application Support" / "second-brain" / "second-brain.pid"
 
 
+def _read_pid_file(pid_file: Path) -> tuple[int, Optional[float]]:
+    """Read PID file and return PID with optional create time."""
+    pid_raw = pid_file.read_text().strip()
+    expected_create_time: Optional[float] = None
+
+    if ":" in pid_raw:
+        pid_part, create_time_part = pid_raw.split(":", 1)
+        pid = int(pid_part)
+        try:
+            expected_create_time = float(create_time_part)
+        except ValueError:
+            expected_create_time = None
+    else:
+        pid = int(pid_raw)
+
+    return pid, expected_create_time
+
+
 def is_running() -> bool:
     """Check if service is running."""
     pid_file = get_pid_file()
     if not pid_file.exists():
         return False
-    
+
     try:
-        with open(pid_file, "r") as f:
-            pid = int(f.read().strip())
-        
-        # Check if process exists
-        os.kill(pid, 0)
+        pid, expected_create_time = _read_pid_file(pid_file)
+        process = psutil.Process(pid)
+        if expected_create_time is not None:
+            # Allow slight drift in floating point representation
+            if abs(process.create_time() - expected_create_time) > 0.5:
+                raise psutil.NoSuchProcess(pid)
+
         return True
-    except (OSError, ValueError):
+    except (ValueError, psutil.Error, OSError):
         # Process doesn't exist or PID file is invalid
         pid_file.unlink(missing_ok=True)
         return False
@@ -70,8 +90,10 @@ def save_pid():
     """Save current process PID."""
     pid_file = get_pid_file()
     pid_file.parent.mkdir(parents=True, exist_ok=True)
+    process = psutil.Process(os.getpid())
+    payload = f"{process.pid}:{process.create_time()}"
     with open(pid_file, "w") as f:
-        f.write(str(os.getpid()))
+        f.write(payload)
 
 
 def remove_pid():
@@ -89,11 +111,11 @@ def main():
 
 @main.command()
 @click.option("--fps", type=float, help="Frames per second to capture")
-@click.option("--ocr-engine", type=click.Choice(["openai", "deepseek"]), help="OCR engine to use (simple toggle, no hybrid)")
+@click.option("--ocr-engine", type=click.Choice(["apple", "deepseek"]), help="OCR engine: apple (default, local/free) or deepseek (local/free/cutting-edge)")
 @click.option("--embeddings-provider", type=click.Choice(["sbert", "openai"]), help="Embeddings provider for semantic search")
 @click.option("--embeddings-model", help="SentenceTransformers model name when provider=sbert")
 @click.option("--openai-emb-model", help="OpenAI embeddings model when provider=openai")
-@click.option("--enable-reranker/--disable-reranker", default=None, help="Enable or disable BAAI reranker")
+@click.option("--enable-reranker/--disable-reranker", default=None, help="Enable or disable BAAI/bge local reranker for improved search relevance")
 @click.option("--reranker-model", help="BAAI reranker model id (e.g., BAAI/bge-reranker-large)")
 def start(
     fps: Optional[float],
@@ -143,6 +165,9 @@ def start(
     # Save PID
     save_pid()
     
+    # Lazy import heavy dependencies only when needed
+    from .pipeline import ProcessingPipeline
+    
     # Create pipeline
     pipeline = ProcessingPipeline(config)
     
@@ -188,10 +213,14 @@ def stop():
     if not is_running():
         console.print("[yellow]Service is not running[/yellow]")
         return
-    
+
     pid_file = get_pid_file()
-    with open(pid_file, "r") as f:
-        pid = int(f.read().strip())
+    try:
+        pid, _ = _read_pid_file(pid_file)
+    except (OSError, ValueError):
+        console.print("[red]PID file is corrupted or missing[/red]")
+        remove_pid()
+        return
     
     try:
         os.kill(pid, signal.SIGTERM)
@@ -301,7 +330,9 @@ def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Opt
             progress.add_task(description="Searching...", total=None)
 
             if semantic:
-                from .embeddings import EmbeddingService  # type: ignore
+                # Lazy import heavy dependencies only when needed
+                from .embeddings import EmbeddingService
+
                 embedding_service = EmbeddingService()
                 matches = embedding_service.search(
                     query=query,
@@ -395,6 +426,56 @@ def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Opt
 
 
 @main.command()
+@click.option("--date", help="Date to convert (YYYY-MM-DD). If not provided, converts yesterday.")
+@click.option("--keep-frames", is_flag=True, help="Keep original frames after conversion")
+def convert_to_video(date: Optional[str], keep_frames: bool):
+    """Convert captured frames to H.264 video for storage efficiency."""
+    from datetime import datetime, timedelta
+    from .video.simple_video_capture import VideoConverter
+    
+    # Parse date or use yesterday
+    if date:
+        try:
+            target_date = datetime.strptime(date, "%Y-%m-%d")
+        except ValueError:
+            console.print(f"[red]Invalid date format. Use YYYY-MM-DD[/red]")
+            return
+    else:
+        target_date = datetime.now() - timedelta(days=1)
+    
+    console.print(f"[cyan]Converting frames from {target_date.strftime('%Y-%m-%d')} to H.264 video...[/cyan]")
+    
+    # Create converter
+    config = Config()
+    if keep_frames:
+        config.set("video.delete_frames_after_conversion", False)
+    else:
+        config.set("video.delete_frames_after_conversion", True)
+    
+    converter = VideoConverter(config)
+    
+    # Check ffmpeg
+    if not converter._check_ffmpeg_available():
+        console.print("[red]ffmpeg is not installed. Install with: brew install ffmpeg[/red]")
+        return
+    
+    # Convert
+    async def do_conversion():
+        result = await converter.convert_day_to_video(target_date)
+        if result:
+            console.print(f"[green]✓ Video created: {result}[/green]")
+            if not keep_frames:
+                console.print(f"[yellow]Original frames deleted to save space[/yellow]")
+        else:
+            console.print(f"[red]✗ Conversion failed[/red]")
+    
+    try:
+        asyncio.run(do_conversion())
+    except Exception as e:
+        console.print(f"[red]Error: {e}[/red]")
+
+
+@main.command()
 def health():
     """Check system health."""
     console.print("[cyan]Checking system health...[/cyan]\n")
@@ -422,16 +503,21 @@ def health():
         checks.append(("Database", f"✗ Error: {e}", "red"))
     
     # Check disk space
-    import psutil
-    config = Config()
-    frames_dir = config.get_frames_dir()
-    disk = psutil.disk_usage(str(frames_dir))
-    free_gb = disk.free / (1024 ** 3)
-    
-    if free_gb > config.get("capture.min_free_space_gb", 10):
-        checks.append(("Disk Space", f"✓ {free_gb:.1f} GB free", "green"))
-    else:
-        checks.append(("Disk Space", f"✗ Only {free_gb:.1f} GB free", "red"))
+    try:
+        import psutil
+        config = Config()
+        frames_dir = config.get_frames_dir()
+        # Create directory if it doesn't exist
+        frames_dir.mkdir(parents=True, exist_ok=True)
+        disk = psutil.disk_usage(str(frames_dir))
+        free_gb = disk.free / (1024 ** 3)
+        
+        if free_gb > config.get("capture.min_free_space_gb", 10):
+            checks.append(("Disk Space", f"✓ {free_gb:.1f} GB free", "green"))
+        else:
+            checks.append(("Disk Space", f"✗ Only {free_gb:.1f} GB free", "red"))
+    except Exception as e:
+        checks.append(("Disk Space", f"✗ Error: {e}", "red"))
     
     # Display results
     table = Table(title="Health Check")
@@ -445,11 +531,43 @@ def health():
 
 
 @main.command()
+@click.option("--port", default=8501, show_default=True, type=int)
+def ui(port: int):
+    """Launch the Streamlit UI for daily summaries and visual timeline."""
+    import subprocess
+    import sys
+    
+    # Get path to streamlit app
+    app_path = Path(__file__).parent / "ui" / "streamlit_app.py"
+    
+    if not app_path.exists():
+        console.print(f"[red]Streamlit app not found at {app_path}[/red]")
+        return
+    
+    console.print(f"[green]Launching Second Brain UI on port {port}...[/green]")
+    console.print(f"[dim]Press Ctrl+C to stop[/dim]")
+    
+    try:
+        # Launch streamlit
+        subprocess.run([
+            sys.executable, "-m", "streamlit", "run",
+            str(app_path),
+            "--server.port", str(port),
+            "--server.headless", "false",
+        ])
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Shutting down UI...[/yellow]")
+    except Exception as e:
+        console.print(f"[red]Error launching UI: {e}[/red]")
+        console.print("[yellow]Make sure streamlit is installed: pip install streamlit[/yellow]")
+
+
+@main.command()
 @click.option("--host", default="127.0.0.1", show_default=True)
 @click.option("--port", default=8000, show_default=True, type=int)
 @click.option("--no-open", is_flag=True, help="Do not open the browser automatically")
 def timeline(host: str, port: int, no_open: bool):
-    """Launch the timeline visualization server."""
+    """Launch the timeline visualization server (React UI)."""
     try:
         from uvicorn import Config as UvicornConfig, Server as UvicornServer
     except ImportError as exc:

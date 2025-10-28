@@ -240,6 +240,8 @@ second-brain restart
 }
 ```
 
+> Note: GPT-5 vision is the only supported OCR model; overrides are ignored.
+
 ## Performance Targets
 
 - Capture latency: < 100ms per frame

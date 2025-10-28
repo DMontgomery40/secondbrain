@@ -1,6 +1,7 @@
 """Database interface for Second Brain."""
 
 import sqlite3
+import zlib
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import structlog
@@ -34,6 +35,14 @@ class Database:
         # Enable foreign keys
         self.conn.execute("PRAGMA foreign_keys = ON")
         
+        # Enable WAL mode for better concurrency and performance
+        self.conn.execute("PRAGMA journal_mode = WAL")
+        
+        # Optimize SQLite settings
+        self.conn.execute("PRAGMA synchronous = NORMAL")  # Faster writes
+        self.conn.execute("PRAGMA cache_size = -64000")  # 64MB cache
+        self.conn.execute("PRAGMA temp_store = MEMORY")  # Use memory for temp tables
+        
         # Load and execute schema
         schema_path = Path(__file__).parent / "schema.sql"
         with open(schema_path, "r") as f:
@@ -41,7 +50,7 @@ class Database:
         self.conn.executescript(schema)
         self.conn.commit()
         
-        logger.info("database_initialized", db_path=str(self.db_path))
+        logger.info("database_initialized", db_path=str(self.db_path), wal_mode=True)
 
     def close(self) -> None:
         """Close database connection."""
@@ -56,6 +65,30 @@ class Database:
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         self.close()
+
+    # Compression helpers
+    
+    def _compress_text(self, text: str) -> bytes:
+        """Compress text using zlib.
+        
+        Args:
+            text: Text to compress
+            
+        Returns:
+            Compressed bytes
+        """
+        return zlib.compress(text.encode('utf-8'), level=6)
+    
+    def _decompress_text(self, compressed: bytes) -> str:
+        """Decompress text.
+        
+        Args:
+            compressed: Compressed bytes
+            
+        Returns:
+            Decompressed text
+        """
+        return zlib.decompress(compressed).decode('utf-8')
 
     # Frame operations
     
@@ -149,7 +182,7 @@ class Database:
     # Text block operations
     
     def insert_text_blocks(self, text_blocks: List[Dict[str, Any]]) -> int:
-        """Insert multiple text blocks.
+        """Insert multiple text blocks with compression.
         
         Args:
             text_blocks: List of text block dictionaries
@@ -158,30 +191,46 @@ class Database:
             Number of blocks inserted
         """
         cursor = self.conn.cursor()
-        cursor.executemany("""
-            INSERT INTO text_blocks (
-                block_id, frame_id, text, normalized_text, confidence,
-                bbox_x, bbox_y, bbox_width, bbox_height, block_type
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, [
-            (
+        
+        # Prepare data with compression
+        data_to_insert = []
+        for block in text_blocks:
+            text = block["text"]
+            normalized = block.get("normalized_text")
+            
+            # Compress text if it's large enough to benefit (> 500 chars)
+            text_compressed = None
+            if len(text) > 500:
+                text_compressed = self._compress_text(text)
+                # Only use compression if it actually saves space
+                if len(text_compressed) >= len(text.encode('utf-8')):
+                    text_compressed = None
+            
+            data_to_insert.append((
                 block["block_id"],
                 block["frame_id"],
-                block["text"],
-                block.get("normalized_text"),
+                text,
+                normalized,
+                text_compressed,
                 block.get("confidence"),
                 block.get("bbox", {}).get("x"),
                 block.get("bbox", {}).get("y"),
                 block.get("bbox", {}).get("width"),
                 block.get("bbox", {}).get("height"),
                 block.get("block_type"),
-            )
-            for block in text_blocks
-        ])
+            ))
+        
+        cursor.executemany("""
+            INSERT INTO text_blocks (
+                block_id, frame_id, text, normalized_text, text_compressed, confidence,
+                bbox_x, bbox_y, bbox_width, bbox_height, block_type
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, data_to_insert)
         self.conn.commit()
         
         count = len(text_blocks)
-        logger.debug("text_blocks_inserted", count=count)
+        compressed_count = sum(1 for d in data_to_insert if d[4] is not None)
+        logger.debug("text_blocks_inserted", count=count, compressed=compressed_count)
         return count
 
     def get_text_blocks_by_frame(self, frame_id: str) -> List[Dict[str, Any]]:
@@ -432,7 +481,7 @@ class Database:
         logger.info("database_vacuumed")
 
     # MCP Server compatibility methods
-    
+
     def search_frames(
         self,
         query: str,
@@ -443,7 +492,7 @@ class Database:
         end_time: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Search frames (compatibility method for MCP server).
-        
+
         Args:
             query: Search query
             semantic: Whether to use semantic search (not implemented yet)
@@ -451,30 +500,30 @@ class Database:
             app_bundle_id: Filter by app
             start_time: ISO format start time
             end_time: ISO format end time
-            
+
         Returns:
             List of search results
         """
         # Convert ISO times to timestamps
         from datetime import datetime
-        
+
         start_timestamp = None
         end_timestamp = None
-        
+
         if start_time:
             try:
                 dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
                 start_timestamp = int(dt.timestamp())
             except ValueError:
                 pass
-        
+
         if end_time:
             try:
                 dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
                 end_timestamp = int(dt.timestamp())
             except ValueError:
                 pass
-        
+
         # Use existing search_text method
         return self.search_text(
             query=query,
@@ -483,18 +532,18 @@ class Database:
             end_timestamp=end_timestamp,
             limit=limit
         )
-    
+
     def get_frame_text(self, frame_id: str) -> List[Dict[str, Any]]:
         """Get text blocks for a frame (compatibility method for MCP server).
-        
+
         Args:
             frame_id: Frame ID
-            
+
         Returns:
             List of text blocks
         """
         return self.get_text_blocks_by_frame(frame_id)
-    
+
     def get_frames_by_time_range(
         self,
         start_time: str,
@@ -502,38 +551,38 @@ class Database:
         limit: int = 100
     ) -> List[Dict[str, Any]]:
         """Get frames within a time range (compatibility method for MCP server).
-        
+
         Args:
             start_time: ISO format start time
             end_time: ISO format end time
             limit: Maximum results
-            
+
         Returns:
             List of frames
         """
         from datetime import datetime
-        
+
         start_timestamp = None
         end_timestamp = None
-        
+
         try:
             dt = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
             start_timestamp = int(dt.timestamp())
         except ValueError:
             pass
-        
+
         try:
             dt = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
             end_timestamp = int(dt.timestamp())
         except ValueError:
             pass
-        
+
         return self.get_frames(
             limit=limit,
             start_timestamp=start_timestamp,
             end_timestamp=end_timestamp
         )
-    
+
     def get_app_stats(
         self,
         app_bundle_id: Optional[str] = None,
@@ -541,17 +590,17 @@ class Database:
         end_time: Optional[str] = None
     ) -> List[Dict[str, Any]]:
         """Get application statistics (compatibility method for MCP server).
-        
+
         Args:
             app_bundle_id: Filter by app
             start_time: ISO format start time
             end_time: ISO format end time
-            
+
         Returns:
             List of app stats
         """
         return self.get_app_usage_stats(limit=50)
-    
+
     def analyze_activity(
         self,
         start_time: str,
@@ -559,14 +608,87 @@ class Database:
         group_by: str = "hour"
     ) -> List[Dict[str, Any]]:
         """Analyze activity patterns (compatibility method for MCP server).
-        
+
         Args:
             start_time: ISO format start time
             end_time: ISO format end time
             group_by: How to group results ('hour', 'day', 'app')
-            
+
         Returns:
             List of activity groups
         """
         # Simple implementation - just return app stats for now
         return self.get_app_usage_stats(limit=20)
+
+    # Summary operations
+
+    def insert_summary(self, summary_data: Dict[str, Any]) -> str:
+        """Insert a summary record.
+
+        Args:
+            summary_data: Dictionary containing summary data
+
+        Returns:
+            summary_id of inserted summary
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            INSERT INTO summaries (
+                summary_id, start_timestamp, end_timestamp,
+                summary_type, summary_text, frame_count, app_names
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            summary_data["summary_id"],
+            summary_data["start_timestamp"],
+            summary_data["end_timestamp"],
+            summary_data["summary_type"],
+            summary_data["summary_text"],
+            summary_data.get("frame_count"),
+            summary_data.get("app_names"),
+        ))
+        self.conn.commit()
+
+        logger.debug("summary_inserted", summary_id=summary_data["summary_id"])
+        return summary_data["summary_id"]
+
+    def get_summaries_for_day(self, date: datetime) -> List[Dict[str, Any]]:
+        """Get all summaries for a specific day.
+
+        Args:
+            date: Date to get summaries for
+
+        Returns:
+            List of summary dictionaries
+        """
+        from datetime import datetime
+        start_ts = int(date.replace(hour=0, minute=0, second=0).timestamp())
+        end_ts = int(date.replace(hour=23, minute=59, second=59).timestamp())
+
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM summaries
+            WHERE start_timestamp >= ? AND end_timestamp <= ?
+            ORDER BY start_timestamp ASC
+        """, (start_ts, end_ts))
+
+        return [dict(row) for row in cursor.fetchall()]
+
+    def get_latest_summary(self, summary_type: str = "hourly") -> Optional[Dict[str, Any]]:
+        """Get the most recent summary of a given type.
+
+        Args:
+            summary_type: Type of summary to retrieve
+
+        Returns:
+            Summary dictionary or None
+        """
+        cursor = self.conn.cursor()
+        cursor.execute("""
+            SELECT * FROM summaries
+            WHERE summary_type = ?
+            ORDER BY end_timestamp DESC
+            LIMIT 1
+        """, (summary_type,))
+
+        row = cursor.fetchone()
+        return dict(row) if row else None
