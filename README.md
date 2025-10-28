@@ -1,5 +1,7 @@
 # Second Brain
 
+> Important: macOS only. Requires macOS 15+ (Sequoia). Apple Silicon (M-series) strongly recommended. DeepSeek MLX features require Apple Silicon.
+
 Second Brain is a local-first, high-fidelity desktop memory system for macOS. It captures your screen at 1–2 fps, extracts rich text and context with dual OCR engines (Apple Vision or DeepSeek), indexes everything for instant recall, and ships with an elegant timeline UI with comprehensive settings panel. All data (screenshots, metadata, embeddings, logs) stays on disk in a predictable directory so you maintain full control.
 
 ---

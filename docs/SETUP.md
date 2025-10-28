@@ -1,5 +1,7 @@
 # Second Brain - Setup Guide (macOS)
 
+> Important: macOS only. Requires macOS 15+ (Sequoia). Apple Silicon (M‑series) strongly recommended. DeepSeek MLX features require Apple Silicon.
+
 ## Prerequisites
 
 - macOS (required for screen capture APIs)
@@ -20,6 +22,26 @@ cd /Users/gregcmartin/Desktop/Second\ Brain
 ```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
+```
+
+PowerShell (Windows):
+```powershell
+./.venv/Scripts/Activate.ps1
+```
+
+If you get a script execution error, allow local scripts for your user:
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+```
+
+Command Prompt (Windows CMD):
+```bat
+\.venv\Scripts\activate.bat
+```
+
+Fish shell:
+```fish
+source .venv/bin/activate.fish
 ```
 
 ### 3. Install Dependencies

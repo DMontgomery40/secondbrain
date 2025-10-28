@@ -77,10 +77,10 @@ class DeepSeekOCR:
         Returns:
             Prompt string for DeepSeek OCR API
         """
-        if self.include_semantic_context:
-            return '<image>\n<|grounding|>Extract all visible text from this screenshot and provide semantic context about what is shown.'
-        else:
-            return '<image>\n<|grounding|>Convert the document to markdown.'
+        # According to DeepSeek OCR docs, the optimal prompt for screenshot text extraction is:
+        # "<image>\n<|grounding|>Convert the document to markdown."
+        # The <|grounding|> token activates spatial awareness, and the specific instruction guides the output format
+        return '<image>\nConvert the document to markdown.'
 
     async def _rate_limit(self) -> None:
         """Enforce rate limiting between requests."""
@@ -130,26 +130,22 @@ class DeepSeekOCR:
 
         from mlx_vlm import generate as mlx_generate
 
-        # Build prompt tuned for OCR; ask for plain text with structure
-        if self.include_semantic_context:
-            user_prompt = (
-                "You are an OCR model. Read the entire screenshot and extract all visible text. "
-                "Preserve order and logical grouping. Provide brief semantic context at the top under 'Context:'.\n\n"
-                "Return plain text."
-            )
-        else:
-            user_prompt = (
-                "Extract all visible text from the image. Return plain text only."
-            )
+        # Use grounding prompt for optimal OCR performance
+        # This activates DeepSeek's spatial modules for precise text localization
+        # Note: apply_chat_template will insert the <image> token, so we only pass the text part
+        prompt_text = self._build_prompt()
+        # Remove <image> token as apply_chat_template handles it via num_images parameter
+        user_prompt = prompt_text.replace('<image>\n', '')
 
-        # Apply chat template
+        # Apply chat template (this will insert <image> token based on num_images)
         formatted = self._mlx_apply_chat_template(
             self._mlx_processor, self._mlx_config, user_prompt, num_images=1
         )
 
         # Run generation
-        max_tokens = self.config.get('ocr.mlx_max_tokens', 1200)
+        max_tokens = self.config.get('ocr.mlx_max_tokens', 8192)
         temperature = self.config.get('ocr.mlx_temperature', 0.0)
+        repetition_penalty = self.config.get('ocr.mlx_repetition_penalty', 1.2)
 
         output = mlx_generate(
             self._mlx_model,
@@ -159,6 +155,7 @@ class DeepSeekOCR:
             verbose=False,
             max_tokens=max_tokens,
             temperature=temperature,
+            repetition_penalty=repetition_penalty,  # Small penalty to prevent hallucination loops
         )
 
         # Package result
@@ -289,12 +286,14 @@ class DeepSeekOCR:
                     return []
 
             except Exception as e:
+                import traceback
                 logger.error(
                     "ocr_unexpected_error",
                     frame_id=frame_id,
                     attempt=attempt + 1,
                     engine="deepseek",
                     error=str(e),
+                    traceback=traceback.format_exc(),
                 )
                 if attempt < self.max_retries - 1:
                     await asyncio.sleep(1)

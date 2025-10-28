@@ -10,7 +10,7 @@ from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from ..config import Config
+from ..config import Config, DEFAULT_CONFIG
 from ..database import Database
 
 config = Config()
@@ -106,22 +106,58 @@ def create_app() -> FastAPI:
 
         return settings
 
+    @app.get("/api/settings/defaults")
+    def get_default_settings():
+        """Return the built-in default settings (source of truth for UI defaults)."""
+        return DEFAULT_CONFIG
+
     @app.post("/api/settings/update")
     def update_settings(settings: dict):
-        """Update multiple settings at once.
+        """Update multiple settings at once with basic validation."""
+        if not isinstance(settings, dict):
+            raise HTTPException(status_code=400, detail="Invalid payload")
 
-        Args:
-            settings: Nested dict of settings to update
-        """
-        # Flatten and update each setting
+        field_errors: dict[str, str] = {}
+
+        def add_error(path: str, msg: str) -> None:
+            field_errors[path] = msg
+
+        # Basic validations for known fields
+        ocr = settings.get("ocr", {}) if isinstance(settings.get("ocr"), dict) else {}
+        engine = ocr.get("engine")
+        if engine is not None and engine not in ["apple", "deepseek"]:
+            add_error("ocr.engine", "must be 'apple' or 'deepseek'")
+
+        rec_level = ocr.get("recognition_level")
+        if rec_level is not None and rec_level not in ["fast", "accurate"]:
+            add_error("ocr.recognition_level", "must be 'fast' or 'accurate'")
+
+        for num_key in [
+            ("capture.fps", settings.get("capture", {}).get("fps")),
+            ("capture.quality", settings.get("capture", {}).get("quality")),
+            ("capture.max_disk_usage_gb", settings.get("capture", {}).get("max_disk_usage_gb")),
+            ("capture.min_free_space_gb", settings.get("capture", {}).get("min_free_space_gb")),
+            ("ocr.batch_size", ocr.get("batch_size")),
+            ("ocr.max_retries", ocr.get("max_retries")),
+            ("ocr.timeout_seconds", ocr.get("timeout_seconds")),
+            ("ocr.buffer_duration", ocr.get("buffer_duration")),
+            ("ocr.mlx_max_tokens", ocr.get("mlx_max_tokens")),
+            ("ocr.mlx_temperature", ocr.get("mlx_temperature")),
+            ("storage.retention_days", settings.get("storage", {}).get("retention_days")),
+        ]:
+            path, value = num_key
+            if value is not None and not isinstance(value, (int, float)):
+                add_error(path, "must be a number")
+
+        if field_errors:
+            raise HTTPException(status_code=422, detail={"errors": field_errors})
+
+        # Persist settings
         for category, values in settings.items():
-            if category.startswith("_"):
-                continue  # Skip special keys like _paths
             if isinstance(values, dict):
                 for key, value in values.items():
                     config.set(f"{category}.{key}", value)
 
-        # Save to file
         config.save()
 
         return {"status": "ok", "message": "Settings updated. Some changes may require service restart."}
@@ -181,7 +217,7 @@ def create_app() -> FastAPI:
     @app.get("/api/settings/ocr-engine")
     def get_ocr_engine():
         """Get current OCR engine setting."""
-        engine = config.get("ocr.engine", "openai")
+        engine = config.get("ocr.engine", "apple")
         return {"engine": engine}
 
     @app.post("/api/settings/ocr-engine")
@@ -189,10 +225,10 @@ def create_app() -> FastAPI:
         """Switch OCR engine on the fly.
 
         Args:
-            engine: Either 'openai' or 'deepseek'
+            engine: Either 'apple' or 'deepseek'
         """
-        if engine not in ['openai', 'deepseek']:
-            raise HTTPException(status_code=400, detail="Invalid engine. Must be 'openai' or 'deepseek'")
+        if engine not in ['apple', 'deepseek']:
+            raise HTTPException(status_code=400, detail="Invalid engine. Must be 'apple' or 'deepseek'")
 
         # Update config and save it
         config.set('ocr.engine', engine)

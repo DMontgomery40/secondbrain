@@ -30,7 +30,8 @@ class Database:
 
     def _initialize_db(self) -> None:
         """Initialize database with schema."""
-        self.conn = sqlite3.connect(str(self.db_path))
+        # Allow usage from worker threads spawned by FastAPI/anyio
+        self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         
         # Enable foreign keys

@@ -27,7 +27,7 @@ type AppStat = {
   frame_count: number;
 };
 
-type OCREngine = "openai" | "deepseek";
+type OCREngine = "apple" | "deepseek";
 
 const fetchFrames = async (params: {
   app_bundle_id?: string | null;
@@ -73,7 +73,7 @@ const formatDate = (timestamp: number) =>
   dayjs.unix(timestamp).format("YYYY-MM-DD");
 
 function OCREngineToggle() {
-  const [engine, setEngine] = useState<OCREngine>("openai");
+  const [engine, setEngine] = useState<OCREngine>("apple");
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -101,11 +101,11 @@ function OCREngineToggle() {
       <h2>OCR Engine</h2>
       <div className="toggle-buttons">
         <button
-          className={engine === "openai" ? "active" : ""}
-          onClick={() => handleToggle("openai")}
+          className={engine === "apple" ? "active" : ""}
+          onClick={() => handleToggle("apple")}
           disabled={isLoading}
         >
-          OpenAI GPT-5
+          Apple Vision
         </button>
         <button
           className={engine === "deepseek" ? "active" : ""}
@@ -119,8 +119,8 @@ function OCREngineToggle() {
         <p>
           <strong>Currently using:</strong> {engine}
         </p>
-        {engine === "openai" && (
-          <p className="engine-warning">⚠️ Costs ~$0.01 per frame</p>
+        {engine === "apple" && (
+          <p className="engine-info">✓ Local, fast, free (on-device)</p>
         )}
         {engine === "deepseek" && (
           <p className="engine-info">✓ Free, runs locally</p>

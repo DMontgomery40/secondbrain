@@ -25,6 +25,11 @@ DEFAULT_CONFIG = {
         "deepseek_mode": "small",  # tiny|small|base|large|gundam (small=640x640, 100 tokens recommended)
         "deepseek_model": "mlx-community/DeepSeek-OCR-8bit",  # 3.85 GB download on first use
         "deepseek_prompt": "<image>\n<|grounding|>Convert the document to markdown.",
+        # MLX inference parameters
+        "mlx_max_tokens": 8192,  # Maximum output tokens (default was 100, need 8192 for full extraction)
+        "mlx_temperature": 0.0,  # Deterministic output for OCR consistency
+        "mlx_repetition_penalty": 1.2,  # Penalty to prevent hallucination loops while allowing legitimate repeated text
+        "include_semantic_context": True,  # Include semantic context in OCR output
     },
     "summarization": {
         "enabled": True,  # AI-powered activity summarization

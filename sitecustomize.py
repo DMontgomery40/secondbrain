@@ -10,6 +10,7 @@ import logging
 import os
 import shutil
 import warnings
+from typing import Any, Literal, cast
 
 logger = logging.getLogger(__name__)
 
@@ -57,24 +58,33 @@ def _ensure_huggingface_cached_download() -> None:
                 RuntimeWarning,
             )
 
-        path = hf_hub_download(
+        # Convert PathLike objects to strings for compatibility
+        cache_dir_str = str(cache_dir) if cache_dir is not None else None
+        local_dir_str = str(local_dir) if local_dir is not None else None
+        
+        # Handle local_dir_use_symlinks type conversion
+        symlinks_param_raw = local_dir_use_symlinks
+        if isinstance(symlinks_param_raw, str) and symlinks_param_raw != "auto":
+            symlinks_param_raw = "auto"
+        symlinks_param: bool | Literal["auto"] = cast(bool | Literal["auto"], symlinks_param_raw)
+
+        # Call download with explicit kwargs; avoid passing unsupported params to satisfy type checkers
+        path = cast(Any, hf_hub_download)(
             repo_id=repo_id,
             filename=filename,
             subfolder=subfolder,
             repo_type=repo_type,
             revision=revision,
-            cache_dir=cache_dir,
-            local_dir=local_dir,
-            local_dir_use_symlinks=local_dir_use_symlinks,
+            cache_dir=cache_dir_str,
+            local_dir=local_dir_str,
+            local_dir_use_symlinks=symlinks_param,
             user_agent=user_agent,
             force_download=force_download,
             proxies=proxies,
             etag_timeout=etag_timeout,
             token=token,
             local_files_only=local_files_only,
-            legacy_cache_layout=legacy_cache_layout,
             resume_download=resume_download,
-            force_filename=force_filename,
         )
 
         if force_filename and force_filename != os.path.basename(path):
@@ -91,12 +101,11 @@ def _ensure_huggingface_cached_download() -> None:
     except AttributeError:
         pass
     else:
-        if isinstance(all_names, (list, tuple)) and "cached_download" not in all_names:
-            try:
-                all_names.append("cached_download")  # type: ignore[arg-type]
-            except AttributeError:
-                # __all__ might be a tuple; fall back to replacing it
-                huggingface_hub.__all__ = tuple(list(all_names) + ["cached_download"])  # type: ignore[attr-defined]
+        if isinstance(all_names, list) and "cached_download" not in all_names:
+            all_names.append("cached_download")
+        elif isinstance(all_names, tuple) and "cached_download" not in all_names:
+            # Replace tuple with list including the new symbol to match common __all__ usage
+            huggingface_hub.__all__ = list(all_names) + ["cached_download"]  # type: ignore[attr-defined, assignment]
 
     logger.getChild("patches").info(
         "registered_cached_download_shim",

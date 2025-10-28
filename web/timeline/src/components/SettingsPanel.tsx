@@ -11,19 +11,16 @@ interface Settings {
     min_free_space_gb: number;
   };
   ocr: {
-    engine: 'openai' | 'deepseek';
-    model: string;
-    api_key_env: string;
+    engine: 'apple' | 'deepseek';
     batch_size: number;
     max_retries: number;
-    rate_limit_rpm: number;
     include_semantic_context: boolean;
     timeout_seconds: number;
-    buffer_enabled: boolean;
     buffer_duration: number;
-    buffer_min_size: number;
+    // Apple Vision
+    recognition_level?: 'fast' | 'accurate';
     // DeepSeek options (MLX backend only)
-    deepseek_mode: string;
+    deepseek_mode?: string;
     deepseek_model?: string; // MLX HF model id
     mlx_max_tokens?: number;
     mlx_temperature?: number;
@@ -81,11 +78,51 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   const loadSettings = async () => {
     try {
       const res = await axios.get('/api/settings/all');
-      setSettings(res.data);
+      setSettings(normalizeSettings(res.data));
     } catch (error) {
       console.error('Failed to load settings:', error);
       alert('Failed to load settings');
     }
+  };
+
+  const normalizeSettings = (raw: any): Settings => {
+    const ocr = raw.ocr || {};
+    return {
+      capture: {
+        fps: raw.capture?.fps ?? 1,
+        format: raw.capture?.format ?? 'png',
+        quality: raw.capture?.quality ?? 85,
+        max_disk_usage_gb: raw.capture?.max_disk_usage_gb ?? 100,
+        min_free_space_gb: raw.capture?.min_free_space_gb ?? 10,
+      },
+      ocr: {
+        engine: (ocr.engine === 'deepseek' ? 'deepseek' : 'apple'),
+        batch_size: ocr.batch_size ?? 5,
+        max_retries: ocr.max_retries ?? 3,
+        include_semantic_context: !!ocr.include_semantic_context,
+        timeout_seconds: ocr.timeout_seconds ?? 30,
+        buffer_duration: ocr.buffer_duration ?? 30,
+        recognition_level: (ocr.recognition_level === 'fast' ? 'fast' : 'accurate'),
+        deepseek_mode: ocr.deepseek_mode ?? 'optimal',
+        deepseek_model: ocr.deepseek_model ?? 'mlx-community/DeepSeek-OCR-4bit',
+        mlx_max_tokens: ocr.mlx_max_tokens ?? 8192,
+        mlx_temperature: ocr.mlx_temperature ?? 0.0,
+        mlx_repetition_penalty: ocr.mlx_repetition_penalty ?? 1.2,
+      },
+      storage: {
+        retention_days: raw.storage?.retention_days ?? 90,
+        compression: !!raw.storage?.compression,
+      },
+      embeddings: {
+        enabled: !!raw.embeddings?.enabled,
+        provider: raw.embeddings?.provider ?? 'sbert',
+        model: raw.embeddings?.model ?? 'sentence-transformers/all-MiniLM-L6-v2',
+        openai_model: raw.embeddings?.openai_model ?? 'text-embedding-3-small',
+        reranker_enabled: !!raw.embeddings?.reranker_enabled,
+        reranker_model: raw.embeddings?.reranker_model ?? 'BAAI/bge-reranker-large',
+      },
+      _paths: raw._paths,
+    };
   };
 
   const loadStats = async () => {
@@ -119,9 +156,18 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
       await axios.post('/api/settings/update', settingsToSave);
       setHasChanges(false);
       alert('Settings saved! Some changes may require restarting the capture service.');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to save settings:', error);
-      alert('Failed to save settings');
+      const detail = error?.response?.data?.detail;
+      if (detail && detail.errors) {
+        const errs = detail.errors as Record<string, string>;
+        const first = Object.entries(errs)[0];
+        alert(`Validation error: ${first[0]} ${first[1]}`);
+      } else if (typeof detail === 'string') {
+        alert(`Error: ${detail}`);
+      } else {
+        alert('Failed to save settings');
+      }
     } finally {
       setSaving(false);
     }
@@ -161,7 +207,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
         )}
 
         <div className="settings-tabs">
-          {Object.keys(settings).filter(k => !k.startsWith('_')).map(category => (
+          {['capture','ocr','storage','embeddings'].map(category => (
             <button
               key={category}
               className={`tab ${activeTab === category ? 'active' : ''}`}
@@ -248,11 +294,11 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                   <label>
                     <input
                       type="radio"
-                      value="openai"
-                      checked={settings.ocr.engine === 'openai'}
-                      onChange={() => updateSetting('ocr', 'engine', 'openai')}
+                      value="apple"
+                      checked={settings.ocr.engine === 'apple'}
+                      onChange={() => updateSetting('ocr', 'engine', 'apple')}
                     />
-                    OpenAI GPT-5 (Costs ~$0.01/frame, very accurate)
+                    Apple Vision (Local, Free)
                   </label>
                   <label>
                     <input
@@ -266,26 +312,17 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                 </div>
               </div>
 
-              {settings.ocr.engine === 'openai' && (
+              {settings.ocr.engine === 'apple' && (
                 <>
                   <div className="setting-row">
-                    <label>Model</label>
+                    <label>Recognition Level</label>
                     <select
-                      value={settings.ocr.model}
-                      onChange={(e) => updateSetting('ocr', 'model', e.target.value)}
+                      value={settings.ocr.recognition_level || 'accurate'}
+                      onChange={(e) => updateSetting('ocr', 'recognition_level', e.target.value)}
                     >
-                      <option value="gpt-5">GPT-5 Vision</option>
-                      <option value="gpt-4-vision">GPT-4 Vision</option>
+                      <option value="fast">Fast</option>
+                      <option value="accurate">Accurate</option>
                     </select>
-                  </div>
-
-                  <div className="setting-row">
-                    <label>Rate Limit (requests/min)</label>
-                    <input
-                      type="number"
-                      value={settings.ocr.rate_limit_rpm}
-                      onChange={(e) => updateSetting('ocr', 'rate_limit_rpm', parseInt(e.target.value))}
-                    />
                   </div>
                 </>
               )}
@@ -305,7 +342,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                     <label>MLX Max Tokens</label>
                     <input
                       type="number"
-                      value={settings.ocr.mlx_max_tokens || 1200}
+                      value={settings.ocr.mlx_max_tokens || 8192}
                       onChange={(e) => updateSetting('ocr', 'mlx_max_tokens', parseInt(e.target.value))}
                     />
                   </div>
@@ -317,6 +354,16 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
                       value={settings.ocr.mlx_temperature ?? 0.0}
                       onChange={(e) => updateSetting('ocr', 'mlx_temperature', parseFloat(e.target.value))}
                     />
+                  </div>
+                  <div className="setting-row">
+                    <label>MLX Repetition Penalty</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      value={settings.ocr.mlx_repetition_penalty ?? 1.2}
+                      onChange={(e) => updateSetting('ocr', 'mlx_repetition_penalty', parseFloat(e.target.value))}
+                    />
+                    <span className="hint">Prevents hallucination loops (1.0-2.0)</span>
                   </div>
 
                   <div className="setting-row">
