@@ -25,6 +25,7 @@ MANIFEST
 
 # Virtual Environment
 venv/
+.venv/
 env/
 ENV/
 env.bak/
@@ -37,6 +38,17 @@ venv.bak/
 *.swo
 *~
 .DS_Store
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+*.bak
+*.backup
+*.cache
+*.old
+~*
 
 # Testing
 .pytest_cache/
@@ -52,6 +64,29 @@ frames/
 *.db-journal
 *.db-wal
 *.db-shm
+
+# Capture files (images and media)
+*.img
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.webp
+*.svg
+*.bmp
+*.tiff
+*.tif
+*.ico
+*.heic
+*.heif
+*.pdf
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
+captures/
+screenshots/
 
 # Logs
 *.log
