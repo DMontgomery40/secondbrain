@@ -82,10 +82,7 @@ You can edit these settings via:
     "rate_limit_rpm": 50,
     "include_semantic_context": true,
     "timeout_seconds": 30,
-    // DeepSeek backends:
-    "deepseek_backend": "docker",    // "docker" or "mlx"
-    "deepseek_docker": true,
-    "deepseek_docker_url": "http://localhost:8001",
+    // DeepSeek OCR settings (MLX backend only)
     "deepseek_mode": "optimal",      // tiny|small|base|large|optimal
     "deepseek_model": "mlx-community/DeepSeek-OCR-4bit",
     "mlx_max_tokens": 1200,
@@ -140,10 +137,9 @@ After installation, you can use convenience scripts from the repo root:
 # Start with default OCR engine (configured in settings)
 second-brain start
 
-# Or specify OCR engine and backend on startup
+# Or specify OCR engine on startup
 second-brain start --ocr-engine openai
-second-brain start --ocr-engine deepseek --deepseek-backend mlx   # local MLX (Apple Silicon)
-second-brain start --ocr-engine deepseek --deepseek-backend docker
+second-brain start --ocr-engine deepseek   # MLX backend (Apple Silicon only)
 
 # Adjust FPS for cost control
 second-brain start --fps 0.5
@@ -254,7 +250,7 @@ asyncio.run(test_openai())
 
 ### Test DeepSeek OCR
 
-First, ensure DeepSeek Docker is running (see DeepSeek Setup section below).
+DeepSeek OCR uses the local MLX backend (no Docker required). Test it with:
 
 ```python
 import asyncio

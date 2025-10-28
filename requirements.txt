@@ -9,8 +9,8 @@ rich==13.7.0
 openai==1.12.0
 
 # API server
-fastapi==0.110.0
-uvicorn[standard]==0.25.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.25.0
 
 # macOS APIs for screen capture and window metadata
 pyobjc-framework-Quartz==10.1  # Screen capture
@@ -19,10 +19,11 @@ pyobjc-framework-Cocoa==10.1   # macOS APIs
 # Database
 sqlite-utils==3.36
 
-# Vector embeddings, search, reranking (NumPy 2.x compatible)
-sentence-transformers>=3.0.1
+# Vector embeddings, search, reranking
+sentence-transformers>=5.0.0
+transformers>=4.57.0,<5.0.0
 chromadb>=0.5.4
-numpy>=2.2.0,<2.3.0
+numpy>=1.26.0,<2.0.0
 FlagEmbedding>=1.2.10
 
 # Async and concurrency
@@ -48,7 +49,7 @@ mcp>=1.19.0
 httpx>=0.28.0
 
 # Image processing for DeepSeek OCR
-Pillow==10.2.0
+Pillow>=10.3.0
 requests==2.31.0
 
 # Local MLX VLM backend for DeepSeek OCR (Apple Silicon)
