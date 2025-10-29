@@ -260,8 +260,17 @@ def create_app() -> FastAPI:
             if hasattr(response, 'output') and response.output:
                 for output_item in response.output:
                     if hasattr(output_item, 'content'):
-                        answer = output_item.content
-                        break
+                        # content is a list of content items, iterate through them
+                        if isinstance(output_item.content, list):
+                            for content_item in output_item.content:
+                                if hasattr(content_item, 'text'):
+                                    answer = content_item.text
+                                    break
+                        else:
+                            # Fallback if content is a string directly
+                            answer = str(output_item.content)
+                        if answer:
+                            break
             if not answer:
                 # Fallback to string representation if structure is different
                 answer = str(response.output) if hasattr(response, 'output') else None
@@ -288,8 +297,17 @@ def create_app() -> FastAPI:
                 if hasattr(response2, 'output') and response2.output:
                     for output_item in response2.output:
                         if hasattr(output_item, 'content'):
-                            answer = output_item.content
-                            break
+                            # content is a list of content items, iterate through them
+                            if isinstance(output_item.content, list):
+                                for content_item in output_item.content:
+                                    if hasattr(content_item, 'text'):
+                                        answer = content_item.text
+                                        break
+                            else:
+                                # Fallback if content is a string directly
+                                answer = str(output_item.content)
+                            if answer:
+                                break
                 if not answer:
                     answer = str(response2.output) if hasattr(response2, 'output') else None
         except Exception as exc:
