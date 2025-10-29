@@ -565,7 +565,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
             </div>
           )}
 
-          
+
         </div>
 
         <div className="settings-footer">

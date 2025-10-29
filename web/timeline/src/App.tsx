@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import axios from "axios";
 import dayjs from "dayjs";
 import { SettingsPanel } from "./components/SettingsPanel";
+import { HourlySummaries } from "./components/HourlySummaries";
+import { DailyStats } from "./components/DailyStats";
 
 type Frame = {
   frame_id: string;
@@ -137,8 +139,12 @@ export default function App() {
   const [appFilter, setAppFilter] = useState<string | null>(null);
   const [startDate, setStartDate] = useState<string | null>(null);
   const [endDate, setEndDate] = useState<string | null>(null);
+  const [startTime, setStartTime] = useState<string | null>(null);
+  const [endTime, setEndTime] = useState<string | null>(null);
   const [selectedFrameId, setSelectedFrameId] = useState<string | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [zoomedFrame, setZoomedFrame] = useState<Frame | null>(null);
   const [question, setQuestion] = useState("");
   const [useSemantic, setUseSemantic] = useState(true);
   const [useReranker, setUseReranker] = useState(false);
@@ -175,13 +181,37 @@ export default function App() {
   };
 
   const framesQuery = useQuery({
-    queryKey: ["frames", appFilter, startDate, endDate],
-    queryFn: () =>
-      fetchFrames({
+    queryKey: ["frames", appFilter, startDate, endDate, startTime, endTime],
+    queryFn: () => {
+      let startTimestamp: number | null = null;
+      let endTimestamp: number | null = null;
+
+      if (startDate) {
+        const startDateTime = dayjs(startDate);
+        if (startTime) {
+          const [hours, minutes] = startTime.split(':').map(Number);
+          startTimestamp = startDateTime.hour(hours).minute(minutes).second(0).unix();
+        } else {
+          startTimestamp = startDateTime.startOf("day").unix();
+        }
+      }
+
+      if (endDate) {
+        const endDateTime = dayjs(endDate);
+        if (endTime) {
+          const [hours, minutes] = endTime.split(':').map(Number);
+          endTimestamp = endDateTime.hour(hours).minute(minutes).second(59).unix();
+        } else {
+          endTimestamp = endDateTime.endOf("day").unix();
+        }
+      }
+
+      return fetchFrames({
         app_bundle_id: appFilter,
-        start: startDate ? dayjs(startDate).startOf("day").unix() : null,
-        end: endDate ? dayjs(endDate).endOf("day").unix() : null
-      })
+        start: startTimestamp,
+        end: endTimestamp
+      });
+    }
   });
 
   const appsQuery = useQuery({
@@ -207,26 +237,62 @@ export default function App() {
     enabled: Boolean(selectedFrameId)
   });
 
-  const groupedByDate = useMemo(() => {
-    const groups = new Map<string, Frame[]>();
+  // Group frames by date and hour
+  const groupedByDateAndHour = useMemo(() => {
+    const dateGroups = new Map<string, Map<number, Frame[]>>();
     (framesQuery.data ?? []).forEach((frame) => {
       const dateKey = formatDate(frame.timestamp);
-      if (!groups.has(dateKey)) {
-        groups.set(dateKey, []);
+      const hour = dayjs.unix(frame.timestamp).hour();
+
+      if (!dateGroups.has(dateKey)) {
+        dateGroups.set(dateKey, new Map());
       }
-      groups.get(dateKey)!.push(frame);
+      const hourGroups = dateGroups.get(dateKey)!;
+
+      if (!hourGroups.has(hour)) {
+        hourGroups.set(hour, []);
+      }
+      hourGroups.get(hour)!.push(frame);
     });
-    return Array.from(groups.entries())
-      .map(([date, frames]) => ({
+
+    return Array.from(dateGroups.entries())
+      .map(([date, hourGroups]) => ({
         date,
-        frames: frames.sort((a, b) => a.timestamp - b.timestamp)
+        hours: Array.from(hourGroups.entries())
+          .map(([hour, frames]) => ({
+            hour,
+            frames: frames.sort((a, b) => a.timestamp - b.timestamp)
+          }))
+          .sort((a, b) => a.hour - b.hour)
       }))
       .sort((a, b) => (a.date > b.date ? -1 : 1));
   }, [framesQuery.data]);
 
+  // Track expanded hours
+  const [expandedHours, setExpandedHours] = useState<Set<string>>(new Set());
+
+  const toggleHour = (dateHourKey: string) => {
+    setExpandedHours(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(dateHourKey)) {
+        newSet.delete(dateHourKey);
+      } else {
+        newSet.add(dateHourKey);
+      }
+      return newSet;
+    });
+  };
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <aside className="sidebar">
+        <button
+          className="sidebar-toggle"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {sidebarCollapsed ? '›' : '‹'}
+        </button>
         <div className="sidebar-header">
           <h1>Second Brain Timeline</h1>
           <button
@@ -256,7 +322,7 @@ export default function App() {
             </select>
           </label>
           <label className="filter-field">
-            <span>From</span>
+            <span>From Date</span>
             <input
               type="date"
               value={startDate ?? ""}
@@ -266,13 +332,35 @@ export default function App() {
             />
           </label>
           <label className="filter-field">
-            <span>To</span>
+            <span>From Time</span>
+            <input
+              type="time"
+              value={startTime ?? ""}
+              onChange={(event) =>
+                setStartTime(event.target.value || null)
+              }
+              disabled={!startDate}
+            />
+          </label>
+          <label className="filter-field">
+            <span>To Date</span>
             <input
               type="date"
               value={endDate ?? ""}
               onChange={(event) =>
                 setEndDate(event.target.value || null)
               }
+            />
+          </label>
+          <label className="filter-field">
+            <span>To Time</span>
+            <input
+              type="time"
+              value={endTime ?? ""}
+              onChange={(event) =>
+                setEndTime(event.target.value || null)
+              }
+              disabled={!endDate}
             />
           </label>
         </section>
@@ -313,6 +401,16 @@ export default function App() {
       </aside>
 
       <main className="timeline-main">
+        {/* Show daily stats if we have a single date selected */}
+        {startDate && !endDate && (
+          <DailyStats date={startDate} />
+        )}
+
+        {/* Show hourly summaries if we have a single date selected */}
+        {startDate && !endDate && (
+          <HourlySummaries date={startDate} />
+        )}
+
         <section className="chat-card">
           <h2 style={{marginTop: 0}}>Ask Your Second Brain</h2>
           <div className="chat-row" style={{marginTop: 8}}>
@@ -335,9 +433,11 @@ export default function App() {
                 <input type="number" min={5} max={50} value={maxResults} onChange={(e) => setMaxResults(parseInt(e.target.value || '20'))} style={{width: 70}} />
               </label>
             </div>
-            <div className="chat-controls" style={{marginTop: 8}}>
+            <div className="chat-controls query-date-controls" style={{marginTop: 8}}>
               <label style={{fontSize: '0.9em', marginRight: 8}}>Date Range:</label>
               <button
+                className="query-preset-btn"
+                data-preset="last-7-days"
                 onClick={() => setQueryDatePreset("Last 7 Days")}
                 style={{
                   padding: '4px 8px',
@@ -352,6 +452,8 @@ export default function App() {
                 Last 7 Days
               </button>
               <button
+                className="query-preset-btn"
+                data-preset="last-30-days"
                 onClick={() => setQueryDatePreset("Last 30 Days")}
                 style={{
                   padding: '4px 8px',
@@ -366,6 +468,8 @@ export default function App() {
                 Last 30 Days
               </button>
               <button
+                className="query-preset-btn"
+                data-preset="all-time"
                 onClick={() => setQueryDatePreset("All Time")}
                 style={{
                   padding: '4px 8px',
@@ -380,6 +484,8 @@ export default function App() {
                 All Time
               </button>
               <button
+                className="query-preset-btn"
+                data-preset="custom"
                 onClick={() => setQueryDatePreset("Custom Range")}
                 style={{
                   padding: '4px 8px',
@@ -398,6 +504,8 @@ export default function App() {
                   <label style={{marginLeft: 12, fontSize: '0.85em'}}>From:</label>
                   <input
                     type="date"
+                    className="query-date-input"
+                    data-query-date="start"
                     value={queryStartDate ?? ""}
                     onChange={(e) => setQueryStartDate(e.target.value || null)}
                     style={{fontSize: '0.85em', padding: '2px 4px'}}
@@ -405,6 +513,8 @@ export default function App() {
                   <label style={{marginLeft: 8, fontSize: '0.85em'}}>To:</label>
                   <input
                     type="date"
+                    className="query-date-input"
+                    data-query-date="end"
                     value={queryEndDate ?? ""}
                     onChange={(e) => setQueryEndDate(e.target.value || null)}
                     style={{fontSize: '0.85em', padding: '2px 4px'}}
@@ -449,42 +559,87 @@ export default function App() {
         </section>
 
         {framesQuery.isLoading ? (
-          <div className="empty-state">Loading frames…</div>
-        ) : groupedByDate.length === 0 ? (
-          <div className="empty-state">No frames captured for this range.</div>
+          <div className="empty-state">
+            <div className="loading-spinner"></div>
+            <p>Loading frames…</p>
+          </div>
+        ) : groupedByDateAndHour.length === 0 ? (
+          <div className="empty-state empty-state-creative">
+            <div className="empty-icon">🔍</div>
+            <h3>No Frames Captured Yet</h3>
+            <p>Start capturing your screen activity to build your visual memory timeline.</p>
+            <p className="empty-hint">💡 Tip: Adjust your date range or app filters to see more frames.</p>
+          </div>
         ) : (
-          groupedByDate.map((group) => (
-            <section key={group.date} className="timeline-group">
-              <header>
-                <h3>{dayjs(group.date).format("dddd, MMM D")}</h3>
+          groupedByDateAndHour.map((dayGroup) => (
+            <section key={dayGroup.date} className="timeline-day-group">
+              <header className="day-header">
+                <h3>{dayjs(dayGroup.date).format("dddd, MMM D, YYYY")}</h3>
+                <span className="day-frame-count">
+                  {dayGroup.hours.reduce((sum, h) => sum + h.frames.length, 0)} frames
+                </span>
               </header>
-              <div className="frame-strip">
-                {group.frames.map((frame) => (
-                  <button
-                    key={frame.frame_id}
-                    className={`frame-card ${
-                      frame.frame_id === selectedFrameId ? "active" : ""
-                    }`}
-                    onClick={() => setSelectedFrameId(frame.frame_id)}
-                  >
-                    <img
-                      src={frame.screenshot_url}
-                      alt={frame.window_title}
-                      loading="lazy"
-                      onError={(event) => {
-                        (event.currentTarget as HTMLImageElement).style.visibility = "hidden";
-                      }}
-                    />
-                    <div className="frame-meta">
-                      <span className="frame-time">{formatTime(frame.timestamp)}</span>
-                      <span className="frame-title">
-                        {frame.window_title || "Untitled"}
-                      </span>
-                      <span className="frame-app">{frame.app_name}</span>
+
+              {dayGroup.hours.map((hourGroup) => {
+                const hourKey = `${dayGroup.date}-${hourGroup.hour}`;
+                const isExpanded = expandedHours.has(hourKey);
+                const hourStart = `${hourGroup.hour.toString().padStart(2, '0')}:00`;
+                const hourEnd = `${hourGroup.hour.toString().padStart(2, '0')}:59`;
+
+                return (
+                  <div key={hourKey} className="hour-group">
+                    <div className="hour-header">
+                      <button
+                        className="hour-toggle"
+                        onClick={() => toggleHour(hourKey)}
+                      >
+                        <span className="toggle-icon">{isExpanded ? '▼' : '▶'}</span>
+                        <span className="hour-label">
+                          {hourStart} - {hourEnd}
+                        </span>
+                        <span className="hour-badge">
+                          {hourGroup.frames.length} frames
+                        </span>
+                      </button>
                     </div>
-                  </button>
-                ))}
-              </div>
+
+                    {isExpanded && (
+                      <div className="frame-strip">
+                        {hourGroup.frames.map((frame) => (
+                          <button
+                            key={frame.frame_id}
+                            className={`frame-card ${
+                              frame.frame_id === selectedFrameId ? "active" : ""
+                            }`}
+                            onClick={() => setSelectedFrameId(frame.frame_id)}
+                          >
+                            <img
+                              src={frame.screenshot_url}
+                              alt={frame.window_title}
+                              loading="lazy"
+                              onError={(event) => {
+                                (event.currentTarget as HTMLImageElement).style.visibility = "hidden";
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setZoomedFrame(frame);
+                              }}
+                              style={{ cursor: 'zoom-in' }}
+                            />
+                            <div className="frame-meta">
+                              <span className="frame-time">{formatTime(frame.timestamp)}</span>
+                              <span className="frame-title">
+                                {frame.window_title || "Untitled"}
+                              </span>
+                              <span className="frame-app">{frame.app_name}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </section>
           ))
         )}
@@ -494,6 +649,36 @@ export default function App() {
         isOpen={settingsOpen}
         onClose={() => setSettingsOpen(false)}
       />
+
+      {zoomedFrame && (
+        <div className="zoom-modal" onClick={() => setZoomedFrame(null)}>
+          <div className="zoom-modal-content" onClick={(e) => e.stopPropagation()}>
+            <button className="zoom-close" onClick={() => setZoomedFrame(null)}>✕</button>
+            <div className="zoom-header">
+              <h2>{zoomedFrame.window_title || "Untitled"}</h2>
+              <p>{zoomedFrame.app_name} • {dayjs(zoomedFrame.iso_timestamp).format("MMM D, YYYY HH:mm:ss")}</p>
+            </div>
+            <img
+              src={zoomedFrame.screenshot_url}
+              alt={zoomedFrame.window_title}
+              className="zoom-image"
+            />
+            {frameTextQuery.data && frameTextQuery.data.length > 0 && (
+              <div className="zoom-text">
+                <h3>OCR Text</h3>
+                <div className="zoom-text-blocks">
+                  {frameTextQuery.data.map((block) => (
+                    <div key={block.block_id} className="zoom-text-block">
+                      <span className="block-type">{block.block_type}</span>
+                      <p>{block.text}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
