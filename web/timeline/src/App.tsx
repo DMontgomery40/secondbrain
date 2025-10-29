@@ -145,6 +145,34 @@ export default function App() {
   const [maxResults, setMaxResults] = useState(20);
   const [answer, setAnswer] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  // Query date range states
+  const [queryDatePreset, setQueryDatePreset] = useState<"Last 7 Days" | "Last 30 Days" | "All Time" | "Custom Range">("Last 7 Days");
+  const [queryStartDate, setQueryStartDate] = useState<string | null>(null);
+  const [queryEndDate, setQueryEndDate] = useState<string | null>(null);
+
+  // Calculate query timestamps based on preset
+  const getQueryTimestamps = (): { start: number | null; end: number | null } => {
+    const now = dayjs();
+    if (queryDatePreset === "Last 7 Days") {
+      return {
+        start: now.subtract(7, "days").startOf("day").unix(),
+        end: now.endOf("day").unix(),
+      };
+    } else if (queryDatePreset === "Last 30 Days") {
+      return {
+        start: now.subtract(30, "days").startOf("day").unix(),
+        end: now.endOf("day").unix(),
+      };
+    } else if (queryDatePreset === "All Time") {
+      return { start: null, end: null };
+    } else if (queryDatePreset === "Custom Range") {
+      return {
+        start: queryStartDate ? dayjs(queryStartDate).startOf("day").unix() : null,
+        end: queryEndDate ? dayjs(queryEndDate).endOf("day").unix() : null,
+      };
+    }
+    return { start: null, end: null };
+  };
 
   const framesQuery = useQuery({
     queryKey: ["frames", appFilter, startDate, endDate],
@@ -306,6 +334,85 @@ export default function App() {
                 Max
                 <input type="number" min={5} max={50} value={maxResults} onChange={(e) => setMaxResults(parseInt(e.target.value || '20'))} style={{width: 70}} />
               </label>
+            </div>
+            <div className="chat-controls" style={{marginTop: 8}}>
+              <label style={{fontSize: '0.9em', marginRight: 8}}>Date Range:</label>
+              <button
+                onClick={() => setQueryDatePreset("Last 7 Days")}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.85em',
+                  background: queryDatePreset === "Last 7 Days" ? '#4a90e2' : '#f0f0f0',
+                  color: queryDatePreset === "Last 7 Days" ? 'white' : 'black',
+                  border: '1px solid #ccc',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                Last 7 Days
+              </button>
+              <button
+                onClick={() => setQueryDatePreset("Last 30 Days")}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.85em',
+                  background: queryDatePreset === "Last 30 Days" ? '#4a90e2' : '#f0f0f0',
+                  color: queryDatePreset === "Last 30 Days" ? 'white' : 'black',
+                  border: '1px solid #ccc',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                Last 30 Days
+              </button>
+              <button
+                onClick={() => setQueryDatePreset("All Time")}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.85em',
+                  background: queryDatePreset === "All Time" ? '#4a90e2' : '#f0f0f0',
+                  color: queryDatePreset === "All Time" ? 'white' : 'black',
+                  border: '1px solid #ccc',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                All Time
+              </button>
+              <button
+                onClick={() => setQueryDatePreset("Custom Range")}
+                style={{
+                  padding: '4px 8px',
+                  fontSize: '0.85em',
+                  background: queryDatePreset === "Custom Range" ? '#4a90e2' : '#f0f0f0',
+                  color: queryDatePreset === "Custom Range" ? 'white' : 'black',
+                  border: '1px solid #ccc',
+                  borderRadius: 4,
+                  cursor: 'pointer',
+                }}
+              >
+                Custom
+              </button>
+              {queryDatePreset === "Custom Range" && (
+                <>
+                  <label style={{marginLeft: 12, fontSize: '0.85em'}}>From:</label>
+                  <input
+                    type="date"
+                    value={queryStartDate ?? ""}
+                    onChange={(e) => setQueryStartDate(e.target.value || null)}
+                    style={{fontSize: '0.85em', padding: '2px 4px'}}
+                  />
+                  <label style={{marginLeft: 8, fontSize: '0.85em'}}>To:</label>
+                  <input
+                    type="date"
+                    value={queryEndDate ?? ""}
+                    onChange={(e) => setQueryEndDate(e.target.value || null)}
+                    style={{fontSize: '0.85em', padding: '2px 4px'}}
+                  />
+                </>
+              )}
+            </div>
+            <div className="chat-controls" style={{marginTop: 8}}>
               <button
                 className="ask-button"
                 disabled={!question.trim() || asking}
@@ -313,12 +420,15 @@ export default function App() {
                   setAsking(true);
                   setAnswer(null);
                   try {
+                    const timestamps = getQueryTimestamps();
                     const res = await axios.post('/api/ask', {
                       query: question,
                       limit: maxResults,
                       app_bundle_id: appFilter,
                       semantic: useSemantic,
                       reranker: useReranker,
+                      start: timestamps.start,
+                      end: timestamps.end,
                     });
                     setAnswer(res.data?.answer ?? null);
                   } catch (err: any) {

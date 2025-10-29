@@ -96,7 +96,8 @@ def create_app() -> FastAPI:
         db: Database = Depends(get_db),
     ):
         """Search text blocks (FTS) or semantic embeddings.
-        payload keys: query (str), limit (int), app_bundle_id (str|None), semantic (bool), reranker (bool)
+        payload keys: query (str), limit (int), app_bundle_id (str|None), semantic (bool), reranker (bool),
+                      start (int|None), end (int|None)
         """
         query: str = payload.get("query", "").strip()
         if not query:
@@ -105,6 +106,8 @@ def create_app() -> FastAPI:
         app_bundle_id = payload.get("app_bundle_id")
         semantic = bool(payload.get("semantic", False))
         reranker = bool(payload.get("reranker", False))
+        start_timestamp = payload.get("start")
+        end_timestamp = payload.get("end")
 
         results = []
         if semantic:
@@ -117,6 +120,8 @@ def create_app() -> FastAPI:
                     limit=limit,
                     app_filter=app_bundle_id,
                     rerank=reranker,
+                    start_timestamp=start_timestamp,
+                    end_timestamp=end_timestamp,
                 )
                 for match in matches:
                     frame = db.get_frame(match["frame_id"]) or {}
@@ -143,8 +148,8 @@ def create_app() -> FastAPI:
             rows = db.search_text(
                 query=query,
                 app_filter=app_bundle_id,
-                start_timestamp=None,
-                end_timestamp=None,
+                start_timestamp=start_timestamp,
+                end_timestamp=end_timestamp,
                 limit=limit,
             )
             for row in rows:
@@ -169,7 +174,8 @@ def create_app() -> FastAPI:
         db: Database = Depends(get_db),
     ):
         """Generate an AI answer from search results.
-        payload keys: query (str), limit (int), app_bundle_id (str|None), semantic (bool), reranker (bool)
+        payload keys: query (str), limit (int), app_bundle_id (str|None), semantic (bool), reranker (bool),
+                      start (int|None), end (int|None)
         """
         query: str = payload.get("query", "").strip()
         if not query:
@@ -178,6 +184,8 @@ def create_app() -> FastAPI:
         app_bundle_id = payload.get("app_bundle_id")
         semantic = bool(payload.get("semantic", True))
         reranker = bool(payload.get("reranker", False))
+        start_timestamp = payload.get("start")
+        end_timestamp = payload.get("end")
 
         # Reuse search endpoint logic
         search_response = search(
@@ -187,6 +195,8 @@ def create_app() -> FastAPI:
                 "app_bundle_id": app_bundle_id,
                 "semantic": semantic,
                 "reranker": reranker,
+                "start": start_timestamp,
+                "end": end_timestamp,
             },
             db,
         )
@@ -231,11 +241,11 @@ def create_app() -> FastAPI:
             client = OpenAI(api_key=api_key)
 
             model = "gpt-5"
-            response = client.chat.completions.create(
+            response = client.responses.create(
                 model=model,
-                messages=[
+                input=[
                     {
-                        "role": "system",
+                        "role": "developer",
                         "content": "You are an expert assistant analyzing OCR from screen captures. Be specific and cite evidence.",
                     },
                     {
@@ -243,9 +253,18 @@ def create_app() -> FastAPI:
                         "content": f"Based on my screen activity, please answer: {query}\n\n{apps_summary}\n\nOCR Text (by relevance):\n{context_text}\n\nAnswer directly and cite snippets.",
                     },
                 ],
-                max_completion_tokens=1200,
+                text={"verbosity": "medium"},
             )
-            answer = response.choices[0].message.content
+            # Extract text from response.output
+            answer = None
+            if hasattr(response, 'output') and response.output:
+                for output_item in response.output:
+                    if hasattr(output_item, 'content'):
+                        answer = output_item.content
+                        break
+            if not answer:
+                # Fallback to string representation if structure is different
+                answer = str(response.output) if hasattr(response, 'output') else None
             if not answer or not answer.strip():
                 # condensed retry
                 condensed = []
@@ -256,15 +275,23 @@ def create_app() -> FastAPI:
                         f"[{ts.strftime('%Y-%m-%d %H:%M:%S') if ts else 'Unknown'}] {r.get('app_name','Unknown')} • {r.get('window_title','')}\n{t}"
                     )
                 condensed_ctx = "\n\n".join(condensed)
-                response2 = client.chat.completions.create(
+                response2 = client.responses.create(
                     model=model,
-                    messages=[
-                        {"role": "system", "content": "Answer succinctly using provided short OCR snippets."},
+                    input=[
+                        {"role": "developer", "content": "Answer succinctly using provided short OCR snippets."},
                         {"role": "user", "content": f"Question: {query}\n\nEvidence:\n{condensed_ctx}"},
                     ],
-                    max_completion_tokens=600,
+                    text={"verbosity": "low"},
                 )
-                answer = response2.choices[0].message.content
+                # Extract text from retry response
+                answer = None
+                if hasattr(response2, 'output') and response2.output:
+                    for output_item in response2.output:
+                        if hasattr(output_item, 'content'):
+                            answer = output_item.content
+                            break
+                if not answer:
+                    answer = str(response2.output) if hasattr(response2, 'output') else None
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"AI answer failed: {exc}")
 

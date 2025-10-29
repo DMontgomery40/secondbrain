@@ -222,28 +222,47 @@ class EmbeddingService:
         limit: int = 10,
         app_filter: Optional[str] = None,
         rerank: bool = False,
+        start_timestamp: Optional[int] = None,
+        end_timestamp: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Search for similar text blocks.
-        
+
         Args:
             query: Search query
             limit: Maximum number of results
             app_filter: Optional app bundle ID to filter by
-            
+            rerank: Whether to rerank results using cross-encoder
+            start_timestamp: Optional start timestamp (unix seconds) to filter by
+            end_timestamp: Optional end timestamp (unix seconds) to filter by
+
         Returns:
             List of matching results with metadata
         """
         if not self.enabled:
             return []
-        
+
         try:
             # Generate query embedding
             query_embedding = self._embed_texts([query])[0]
-            
-            # Build where filter if app_filter provided
+
+            # Build where filter for app, start, and end timestamps
             where = None
+            where_conditions = []
+
             if app_filter:
-                where = {"app_bundle_id": app_filter}
+                where_conditions.append({"app_bundle_id": app_filter})
+
+            if start_timestamp is not None:
+                where_conditions.append({"timestamp": {"$gte": start_timestamp}})
+
+            if end_timestamp is not None:
+                where_conditions.append({"timestamp": {"$lte": end_timestamp}})
+
+            # Combine conditions with $and if multiple filters
+            if len(where_conditions) == 1:
+                where = where_conditions[0]
+            elif len(where_conditions) > 1:
+                where = {"$and": where_conditions}
             
             # Search collection
             results = self.collection.query(

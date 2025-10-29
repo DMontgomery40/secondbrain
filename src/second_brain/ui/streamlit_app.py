@@ -727,6 +727,50 @@ class SecondBrainUI:
                 # Convert app_name to app_bundle_id for search queries
                 query_app_filter = app_mapping.get(query_app_filter_name) if query_app_filter_name != "All" else None
 
+            # Date Range Selection
+            st.markdown("##### 📅 Date Range")
+            date_preset = st.radio(
+                "Select time range",
+                options=["Last 7 Days", "Last 30 Days", "All Time", "Custom Range"],
+                index=0,  # Default to "Last 7 Days"
+                horizontal=True,
+                help="Choose the time period to search within"
+            )
+
+            # Calculate timestamps based on preset
+            from datetime import datetime, timedelta
+            query_start_timestamp = None
+            query_end_timestamp = None
+
+            if date_preset == "Last 7 Days":
+                query_start_timestamp = int((datetime.now() - timedelta(days=7)).timestamp())
+                query_end_timestamp = int(datetime.now().timestamp())
+            elif date_preset == "Last 30 Days":
+                query_start_timestamp = int((datetime.now() - timedelta(days=30)).timestamp())
+                query_end_timestamp = int(datetime.now().timestamp())
+            elif date_preset == "All Time":
+                query_start_timestamp = None
+                query_end_timestamp = None
+            elif date_preset == "Custom Range":
+                col_start, col_end = st.columns(2)
+                with col_start:
+                    custom_start_date = st.date_input(
+                        "Start Date",
+                        value=(datetime.now() - timedelta(days=7)).date(),
+                        max_value=datetime.now().date(),
+                        key="query_custom_start"
+                    )
+                with col_end:
+                    custom_end_date = st.date_input(
+                        "End Date",
+                        value=datetime.now().date(),
+                        max_value=datetime.now().date(),
+                        key="query_custom_end"
+                    )
+                # Convert dates to timestamps (start of day to end of day)
+                query_start_timestamp = int(datetime.combine(custom_start_date, datetime.min.time()).timestamp())
+                query_end_timestamp = int(datetime.combine(custom_end_date, datetime.max.time()).timestamp())
+
         # Execute search
         if query_text:
             with st.spinner("🔍 Searching your memory..."):
@@ -753,6 +797,8 @@ class SecondBrainUI:
                                 limit=result_limit,
                                 app_filter=query_app_filter,
                                 rerank=use_reranker,
+                                start_timestamp=query_start_timestamp,
+                                end_timestamp=query_end_timestamp,
                             )
 
                             debug_info.append(f"Got {len(matches)} matches from embedding service")
@@ -786,8 +832,8 @@ class SecondBrainUI:
                         results = db.search_text(
                             query=query_text,
                             app_filter=query_app_filter,
-                            start_timestamp=None,
-                            end_timestamp=None,
+                            start_timestamp=query_start_timestamp,
+                            end_timestamp=query_end_timestamp,
                             limit=result_limit,
                         )
                         debug_info.append(f"Got {len(results)} results from FTS")
