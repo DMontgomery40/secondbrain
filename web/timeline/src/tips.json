@@ -1,0 +1,43 @@
+{
+  "loadingTips": [
+    "Your Second Brain captures screenshots automatically to help you remember everything you've worked on.",
+    "Pro tip: Use the semantic search toggle for AI-powered contextual search across your timeline.",
+    "The reranker improves search quality by re-scoring results using advanced ML models.",
+    "Filter by application to focus on specific tools you were using during a time period.",
+    "Date filters help you narrow down to specific days when you're looking for something.",
+    "OCR extracts text from your screenshots so you can search through visual content.",
+    "Apple Vision OCR runs locally on your device - no data leaves your machine.",
+    "DeepSeek OCR uses local ML models for enhanced text recognition accuracy.",
+    "Your timeline shows recent frames first, making it easy to recall what you just did.",
+    "Click any frame to see full details, extracted text, and metadata in the sidebar.",
+    "The AI answer feature uses RAG (Retrieval-Augmented Generation) to answer questions about your screen history.",
+    "Tip: Be specific in your questions - mention apps, times, or topics for better results.",
+    "Your screenshots are stored locally with configurable retention policies.",
+    "Settings let you control capture FPS, storage limits, and OCR preferences.",
+    "The system respects your disk space limits and stops capturing when thresholds are reached.",
+    "All processing happens on your machine - your privacy is protected by design."
+  ],
+  "tooltips": {
+    "settingsButton": "Open system settings to configure capture, OCR, storage, and embeddings",
+    "appFilter": "Filter timeline by specific application to focus your search",
+    "startDate": "Set the earliest date to include in your timeline view",
+    "endDate": "Set the latest date to include in your timeline view",
+    "semanticToggle": "Enable AI-powered semantic search using embeddings for contextual matching",
+    "rerankerToggle": "Use a reranker model to improve search result relevance (requires semantic search)",
+    "maxResults": "Maximum number of results to retrieve from your timeline",
+    "askButton": "Ask a natural language question about your screen history",
+    "ocrEngineApple": "Apple Vision Framework - Fast, accurate, runs on-device with no API costs",
+    "ocrEngineDeepSeek": "DeepSeek OCR with MLX - Advanced local OCR using machine learning models",
+    "frameCard": "Click to view full details, extracted text, and metadata for this capture",
+    "fpsSlider": "Higher FPS captures more frames but uses more storage",
+    "imageFormat": "PNG is lossless but larger; JPG is compressed and saves space",
+    "imageQuality": "Higher quality preserves detail but increases file size",
+    "retentionDays": "Screenshots older than this will be automatically cleaned up",
+    "embeddingsProvider": "Choose between local SentenceTransformers or OpenAI's embedding API",
+    "sbertModel": "Local embedding model - no API costs, runs on your machine",
+    "openaiModel": "OpenAI embeddings - requires API key, more accurate but costs money",
+    "saveButton": "Save configuration changes (some settings require service restart)",
+    "resetButton": "Reset all settings in this category to default values",
+    "closeButton": "Close settings panel without saving changes"
+  }
+}

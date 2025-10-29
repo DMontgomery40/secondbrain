@@ -5,6 +5,10 @@ import dayjs from "dayjs";
 import { SettingsPanel } from "./components/SettingsPanel";
 import { HourlySummaries } from "./components/HourlySummaries";
 import { DailyStats } from "./components/DailyStats";
+import { DopamineButton } from "./components/DopamineButton";
+import { LoadingBar } from "./components/LoadingBar";
+import { Tooltip } from "./components/Tooltip";
+import tipsData from "./tips.json";
 
 type Frame = {
   frame_id: string;
@@ -99,39 +103,46 @@ function OCREngineToggle() {
   };
 
   return (
-    <section className="ocr-engine-toggle filter-card">
-      <h2>OCR Engine</h2>
-      <div className="toggle-buttons">
-        <button
-          className={engine === "apple" ? "active" : ""}
-          onClick={() => handleToggle("apple")}
-          disabled={isLoading}
-        >
-          Apple Vision
-        </button>
-        <button
-          className={engine === "deepseek" ? "active" : ""}
-          onClick={() => handleToggle("deepseek")}
-          disabled={isLoading}
-        >
-          DeepSeek OCR
-        </button>
-      </div>
-      <div className="engine-status">
-        <p>
-          <strong>Currently using:</strong> {engine}
-        </p>
-        {engine === "apple" && (
-          <p className="engine-info">✓ Local, fast, free (on-device)</p>
-        )}
-        {engine === "deepseek" && (
-          <p className="engine-info">✓ Free, runs locally</p>
-        )}
-        <p className="engine-note">
-          <small>Note: Restart capture service for changes to take effect</small>
-        </p>
-      </div>
-    </section>
+    <>
+      <LoadingBar isLoading={isLoading} message="Switching OCR engine..." />
+      <section className="ocr-engine-toggle filter-card">
+        <h2>OCR Engine</h2>
+        <div className="toggle-buttons">
+          <Tooltip content={tipsData.tooltips.ocrEngineApple}>
+            <button
+              className={engine === "apple" ? "active" : ""}
+              onClick={() => handleToggle("apple")}
+              disabled={isLoading}
+            >
+              Apple Vision
+            </button>
+          </Tooltip>
+          <Tooltip content={tipsData.tooltips.ocrEngineDeepSeek}>
+            <button
+              className={engine === "deepseek" ? "active" : ""}
+              onClick={() => handleToggle("deepseek")}
+              disabled={isLoading}
+            >
+              DeepSeek OCR
+            </button>
+          </Tooltip>
+        </div>
+        <div className="engine-status">
+          <p>
+            <strong>Currently using:</strong> {engine}
+          </p>
+          {engine === "apple" && (
+            <p className="engine-info">✓ Local, fast, free (on-device)</p>
+          )}
+          {engine === "deepseek" && (
+            <p className="engine-info">✓ Free, runs locally</p>
+          )}
+          <p className="engine-note">
+            <small>Note: Restart capture service for changes to take effect</small>
+          </p>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -186,32 +197,50 @@ export default function App() {
       let startTimestamp: number | null = null;
       let endTimestamp: number | null = null;
 
-      if (startDate) {
-        const startDateTime = dayjs(startDate);
-        if (startTime) {
-          const [hours, minutes] = startTime.split(':').map(Number);
-          startTimestamp = startDateTime.hour(hours).minute(minutes).second(0).unix();
-        } else {
-          startTimestamp = startDateTime.startOf("day").unix();
+      try {
+        if (startDate) {
+          const startDateTime = dayjs(startDate);
+          if (!startDateTime.isValid()) {
+            throw new Error(`Invalid start date: ${startDate}`);
+          }
+          if (startTime) {
+            const [hours, minutes] = startTime.split(':').map(Number);
+            if (isNaN(hours) || isNaN(minutes)) {
+              throw new Error(`Invalid start time: ${startTime}`);
+            }
+            startTimestamp = startDateTime.hour(hours).minute(minutes).second(0).unix();
+          } else {
+            startTimestamp = startDateTime.startOf("day").unix();
+          }
         }
-      }
 
-      if (endDate) {
-        const endDateTime = dayjs(endDate);
-        if (endTime) {
-          const [hours, minutes] = endTime.split(':').map(Number);
-          endTimestamp = endDateTime.hour(hours).minute(minutes).second(59).unix();
-        } else {
-          endTimestamp = endDateTime.endOf("day").unix();
+        if (endDate) {
+          const endDateTime = dayjs(endDate);
+          if (!endDateTime.isValid()) {
+            throw new Error(`Invalid end date: ${endDate}`);
+          }
+          if (endTime) {
+            const [hours, minutes] = endTime.split(':').map(Number);
+            if (isNaN(hours) || isNaN(minutes)) {
+              throw new Error(`Invalid end time: ${endTime}`);
+            }
+            endTimestamp = endDateTime.hour(hours).minute(minutes).second(59).unix();
+          } else {
+            endTimestamp = endDateTime.endOf("day").unix();
+          }
         }
-      }
 
-      return fetchFrames({
-        app_bundle_id: appFilter,
-        start: startTimestamp,
-        end: endTimestamp
-      });
-    }
+        return fetchFrames({
+          app_bundle_id: appFilter,
+          start: startTimestamp,
+          end: endTimestamp
+        });
+      } catch (error) {
+        console.error("Error processing date filters:", error);
+        throw error;
+      }
+    },
+    retry: false, // Don't retry on error
   });
 
   const appsQuery = useQuery({
@@ -285,6 +314,10 @@ export default function App() {
 
   return (
     <div className={`app-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
+      <LoadingBar
+        isLoading={framesQuery.isLoading || asking}
+        message={framesQuery.isLoading ? "Loading timeline frames..." : asking ? "Asking your Second Brain..." : undefined}
+      />
       <aside className="sidebar">
         <button
           className="sidebar-toggle"
@@ -295,41 +328,56 @@ export default function App() {
         </button>
         <div className="sidebar-header">
           <h1>Second Brain Timeline</h1>
-          <button
-            className="settings-button"
-            onClick={() => setSettingsOpen(true)}
-            title="Settings"
-          >
-            ⚙️
-          </button>
+          <Tooltip content={tipsData.tooltips.settingsButton}>
+            <button
+              className="settings-button"
+              onClick={() => setSettingsOpen(true)}
+              title="Settings"
+            >
+              ⚙️
+            </button>
+          </Tooltip>
         </div>
         <section className="filter-card">
           <h2>Filters</h2>
           <label className="filter-field">
             <span>Application</span>
-            <select
-              value={appFilter ?? ""}
-              onChange={(event) =>
-                setAppFilter(event.target.value ? event.target.value : null)
-              }
-            >
-              <option value="">All applications</option>
-              {appsQuery.data?.map((app) => (
-                <option key={app.app_bundle_id} value={app.app_bundle_id}>
-                  {app.app_name} ({app.frame_count})
-                </option>
-              ))}
-            </select>
+            <Tooltip content={tipsData.tooltips.appFilter}>
+              <select
+                value={appFilter ?? ""}
+                onChange={(event) =>
+                  setAppFilter(event.target.value ? event.target.value : null)
+                }
+              >
+                <option value="">All applications</option>
+                {appsQuery.data?.map((app) => (
+                  <option key={app.app_bundle_id} value={app.app_bundle_id}>
+                    {app.app_name} ({app.frame_count})
+                  </option>
+                ))}
+              </select>
+            </Tooltip>
           </label>
           <label className="filter-field">
             <span>From Date</span>
-            <input
-              type="date"
-              value={startDate ?? ""}
-              onChange={(event) =>
-                setStartDate(event.target.value || null)
-              }
-            />
+            <Tooltip content={tipsData.tooltips.startDate}>
+              <input
+                type="date"
+                value={startDate ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || null;
+                  if (value) {
+                    // Validate date format
+                    const dateCheck = dayjs(value);
+                    if (!dateCheck.isValid()) {
+                      console.error("Invalid date format:", value);
+                      return;
+                    }
+                  }
+                  setStartDate(value);
+                }}
+              />
+            </Tooltip>
           </label>
           <label className="filter-field">
             <span>From Time</span>
@@ -344,13 +392,24 @@ export default function App() {
           </label>
           <label className="filter-field">
             <span>To Date</span>
-            <input
-              type="date"
-              value={endDate ?? ""}
-              onChange={(event) =>
-                setEndDate(event.target.value || null)
-              }
-            />
+            <Tooltip content={tipsData.tooltips.endDate}>
+              <input
+                type="date"
+                value={endDate ?? ""}
+                onChange={(event) => {
+                  const value = event.target.value || null;
+                  if (value) {
+                    // Validate date format
+                    const dateCheck = dayjs(value);
+                    if (!dateCheck.isValid()) {
+                      console.error("Invalid date format:", value);
+                      return;
+                    }
+                  }
+                  setEndDate(value);
+                }}
+              />
+            </Tooltip>
           </label>
           <label className="filter-field">
             <span>To Time</span>
@@ -420,18 +479,24 @@ export default function App() {
               onChange={(e) => setQuestion(e.target.value)}
             />
             <div className="chat-controls">
-              <label style={{display: 'flex', gap: 6, alignItems: 'center'}}>
-                <input type="checkbox" checked={useSemantic} onChange={(e) => setUseSemantic(e.target.checked)} />
-                Semantic
-              </label>
-              <label style={{display: 'flex', gap: 6, alignItems: 'center'}}>
-                <input type="checkbox" checked={useReranker} onChange={(e) => setUseReranker(e.target.checked)} disabled={!useSemantic} />
-                Reranker
-              </label>
-              <label style={{display: 'flex', gap: 6, alignItems: 'center'}}>
-                Max
-                <input type="number" min={5} max={50} value={maxResults} onChange={(e) => setMaxResults(parseInt(e.target.value || '20'))} style={{width: 70}} />
-              </label>
+              <Tooltip content={tipsData.tooltips.semanticToggle}>
+                <label style={{display: 'flex', gap: 6, alignItems: 'center'}}>
+                  <input type="checkbox" checked={useSemantic} onChange={(e) => setUseSemantic(e.target.checked)} />
+                  Semantic
+                </label>
+              </Tooltip>
+              <Tooltip content={tipsData.tooltips.rerankerToggle}>
+                <label style={{display: 'flex', gap: 6, alignItems: 'center'}}>
+                  <input type="checkbox" checked={useReranker} onChange={(e) => setUseReranker(e.target.checked)} disabled={!useSemantic} />
+                  Reranker
+                </label>
+              </Tooltip>
+              <Tooltip content={tipsData.tooltips.maxResults}>
+                <label style={{display: 'flex', gap: 6, alignItems: 'center'}}>
+                  Max
+                  <input type="number" min={5} max={50} value={maxResults} onChange={(e) => setMaxResults(parseInt(e.target.value || '20'))} style={{width: 70}} />
+                </label>
+              </Tooltip>
             </div>
             <div className="chat-controls query-date-controls" style={{marginTop: 8}}>
               <label style={{fontSize: '0.9em', marginRight: 8}}>Date Range:</label>
@@ -523,31 +588,78 @@ export default function App() {
               )}
             </div>
             <div className="chat-controls" style={{marginTop: 8}}>
-              <button
-                className="ask-button"
-                disabled={!question.trim() || asking}
-                onClick={async () => {
-                  setAsking(true);
-                  setAnswer(null);
-                  try {
-                    const timestamps = getQueryTimestamps();
-                    const res = await axios.post('/api/ask', {
-                      query: question,
-                      limit: maxResults,
-                      app_bundle_id: appFilter,
-                      semantic: useSemantic,
-                      reranker: useReranker,
-                      start: timestamps.start,
-                      end: timestamps.end,
-                    });
-                    setAnswer(res.data?.answer ?? null);
-                  } catch (err: any) {
-                    setAnswer(`Error: ${err?.response?.data?.detail || err.message}`);
-                  } finally {
-                    setAsking(false);
-                  }
-                }}
-              >{asking ? 'Thinking…' : 'Ask'}</button>
+              <Tooltip content={tipsData.tooltips.askButton}>
+                <DopamineButton
+                  className="ask-button"
+                  variant="primary"
+                  disabled={!question.trim() || asking}
+                  onClick={async () => {
+                    setAsking(true);
+                    setAnswer(null);
+                    try {
+                      // Use timeline date filters if set, otherwise use query date preset
+                      let startTimestamp: number | null = null;
+                      let endTimestamp: number | null = null;
+                      
+                      if (startDate || endDate) {
+                        // Use timeline filters
+                        if (startDate) {
+                          const startDateTime = dayjs(startDate);
+                          if (startTime) {
+                            const [hours, minutes] = startTime.split(':').map(Number);
+                            startTimestamp = startDateTime.hour(hours).minute(minutes).second(0).unix();
+                          } else {
+                            startTimestamp = startDateTime.startOf("day").unix();
+                          }
+                        }
+                        if (endDate) {
+                          const endDateTime = dayjs(endDate);
+                          if (endTime) {
+                            const [hours, minutes] = endTime.split(':').map(Number);
+                            endTimestamp = endDateTime.hour(hours).minute(minutes).second(59).unix();
+                          } else {
+                            endTimestamp = endDateTime.endOf("day").unix();
+                          }
+                        }
+                      } else {
+                        // Use query date preset
+                        const timestamps = getQueryTimestamps();
+                        startTimestamp = timestamps.start;
+                        endTimestamp = timestamps.end;
+                      }
+
+                      const res = await axios.post('/api/ask', {
+                        query: question,
+                        limit: maxResults,
+                        app_bundle_id: appFilter,
+                        semantic: useSemantic,
+                        reranker: useReranker,
+                        start: startTimestamp,
+                        end: endTimestamp,
+                      });
+                      
+                      const answerText = res.data?.answer;
+                      const results = res.data?.results || [];
+                      
+                      // Handle None/null/empty responses
+                      if (answerText && answerText !== "None" && answerText.trim()) {
+                        setAnswer(answerText);
+                      } else if (results.length === 0) {
+                        setAnswer(`No matching frames found for your query "${question}". Try:\n\n• Removing date filters if you have any set\n• Using different keywords\n• Checking if frames have been captured for the selected date range`);
+                      } else {
+                        setAnswer(`Found ${results.length} matching frame(s) but couldn't generate an answer. Try refining your question or checking if OCR text is available for those frames.`);
+                      }
+                    } catch (err: any) {
+                      console.error("Error asking question:", err);
+                      setAnswer(`Error: ${err?.response?.data?.detail || err.message}`);
+                    } finally {
+                      setAsking(false);
+                    }
+                  }}
+                >
+                  {asking ? 'Thinking…' : 'Ask'}
+                </DopamineButton>
+              </Tooltip>
             </div>
           </div>
           {answer && (
@@ -562,6 +674,13 @@ export default function App() {
           <div className="empty-state">
             <div className="loading-spinner"></div>
             <p>Loading frames…</p>
+          </div>
+        ) : framesQuery.error ? (
+          <div className="empty-state empty-state-creative">
+            <div className="empty-icon">⚠️</div>
+            <h3>Error Loading Timeline</h3>
+            <p>{framesQuery.error instanceof Error ? framesQuery.error.message : String(framesQuery.error)}</p>
+            <p className="empty-hint">💡 Try clearing your date filters and selecting a different date range.</p>
           </div>
         ) : groupedByDateAndHour.length === 0 ? (
           <div className="empty-state empty-state-creative">
@@ -606,34 +725,35 @@ export default function App() {
                     {isExpanded && (
                       <div className="frame-strip">
                         {hourGroup.frames.map((frame) => (
-                          <button
-                            key={frame.frame_id}
-                            className={`frame-card ${
-                              frame.frame_id === selectedFrameId ? "active" : ""
-                            }`}
-                            onClick={() => setSelectedFrameId(frame.frame_id)}
-                          >
-                            <img
-                              src={frame.screenshot_url}
-                              alt={frame.window_title}
-                              loading="lazy"
-                              onError={(event) => {
-                                (event.currentTarget as HTMLImageElement).style.visibility = "hidden";
-                              }}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setZoomedFrame(frame);
-                              }}
-                              style={{ cursor: 'zoom-in' }}
-                            />
-                            <div className="frame-meta">
-                              <span className="frame-time">{formatTime(frame.timestamp)}</span>
-                              <span className="frame-title">
-                                {frame.window_title || "Untitled"}
-                              </span>
-                              <span className="frame-app">{frame.app_name}</span>
-                            </div>
-                          </button>
+                          <Tooltip key={frame.frame_id} content={tipsData.tooltips.frameCard} position="bottom">
+                            <button
+                              className={`frame-card ${
+                                frame.frame_id === selectedFrameId ? "active" : ""
+                              }`}
+                              onClick={() => setSelectedFrameId(frame.frame_id)}
+                            >
+                              <img
+                                src={frame.screenshot_url}
+                                alt={frame.window_title}
+                                loading="lazy"
+                                onError={(event) => {
+                                  (event.currentTarget as HTMLImageElement).style.visibility = "hidden";
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setZoomedFrame(frame);
+                                }}
+                                style={{ cursor: 'zoom-in' }}
+                              />
+                              <div className="frame-meta">
+                                <span className="frame-time">{formatTime(frame.timestamp)}</span>
+                                <span className="frame-title">
+                                  {frame.window_title || "Untitled"}
+                                </span>
+                                <span className="frame-app">{frame.app_name}</span>
+                              </div>
+                            </button>
+                          </Tooltip>
                         ))}
                       </div>
                     )}

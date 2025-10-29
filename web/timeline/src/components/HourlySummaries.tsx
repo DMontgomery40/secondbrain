@@ -25,10 +25,18 @@ export function HourlySummaries({ date }: HourlySummariesProps) {
   const summariesQuery = useQuery({
     queryKey: ["summaries", date],
     queryFn: async () => {
-      const response = await axios.get(`/api/summaries?date=${date}`);
-      return response.data.summaries as Summary[];
+      if (!date) return [];
+      try {
+        const response = await axios.get(`/api/summaries?date=${date}`);
+        return response.data.summaries as Summary[];
+      } catch (error: any) {
+        console.error("Error fetching summaries:", error);
+        // Return empty array instead of throwing
+        return [];
+      }
     },
     enabled: !!date,
+    retry: false,
   });
 
   if (!date) return null;
@@ -37,20 +45,23 @@ export function HourlySummaries({ date }: HourlySummariesProps) {
     return (
       <div className="summaries-loading">
         <div className="loading-spinner"></div>
-        <p>Generating hourly summaries...</p>
+        <p>Loading hourly summaries...</p>
       </div>
     );
   }
 
   if (summariesQuery.error) {
-    return null; // Silently fail if summaries aren't available
+    console.error("Error loading summaries:", summariesQuery.error);
+    // Don't show error to user, just return null
+    return null;
   }
 
   const summaries = summariesQuery.data || [];
   const hourlySummaries = summaries.filter(s => s.summary_type === "hourly");
 
   if (hourlySummaries.length === 0) {
-    return null; // Don't show empty state
+    // No summaries available for this date - this is normal if summaries haven't been generated yet
+    return null;
   }
 
   const toggleSummary = (summaryId: string) => {
@@ -65,6 +76,21 @@ export function HourlySummaries({ date }: HourlySummariesProps) {
     });
   };
 
+  // Normalize app names which may arrive as JSON string, array, or null
+  const normalizeAppNames = (value: unknown): string[] => {
+    if (Array.isArray(value)) return value.filter(Boolean) as string[];
+    if (typeof value === "string") {
+      try {
+        const parsed = JSON.parse(value);
+        if (Array.isArray(parsed)) return parsed.filter(Boolean);
+        return value ? [value] : [];
+      } catch {
+        return value ? [value] : [];
+      }
+    }
+    return [];
+  };
+
   return (
     <div className="hourly-summaries">
       <h2 className="summaries-title">📊 AI Hourly Summaries</h2>
@@ -73,6 +99,7 @@ export function HourlySummaries({ date }: HourlySummariesProps) {
           const isExpanded = expandedSummaries.has(summary.summary_id);
           const startTime = dayjs.unix(summary.start_timestamp).format("HH:mm");
           const endTime = dayjs.unix(summary.end_timestamp).format("HH:mm");
+          const appNames = normalizeAppNames((summary as any).app_names);
 
           return (
             <div key={summary.summary_id} className="summary-card">
@@ -96,10 +123,8 @@ export function HourlySummaries({ date }: HourlySummariesProps) {
                   <span className="meta-item">
                     📸 {summary.frame_count} frames analyzed
                   </span>
-                  {summary.app_names && summary.app_names.length > 0 && (
-                    <span className="meta-item">
-                      💼 Apps: {summary.app_names.join(", ")}
-                    </span>
+                  {appNames.length > 0 && (
+                    <span className="meta-item">💼 Apps: {appNames.join(", ")}</span>
                   )}
                 </div>
               </div>

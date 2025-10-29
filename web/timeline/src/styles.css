@@ -90,16 +90,38 @@ body {
   border-radius: 10px;
   cursor: pointer;
   font-size: 1.2rem;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 2px 8px -4px rgba(105, 140, 255, 0.3);
+}
+
+.settings-button::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, rgba(255, 255, 255, 0.2), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
 }
 
 .settings-button:hover {
   background: rgba(105, 140, 255, 0.25);
   border-color: rgba(105, 140, 255, 0.5);
-  transform: translateY(-1px);
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 16px -6px rgba(105, 140, 255, 0.6);
+}
+
+.settings-button:hover::before {
+  opacity: 1;
+}
+
+.settings-button:active {
+  transform: translateY(-1px) scale(1.02);
+  transition-duration: 0.1s;
 }
 
 .filter-card,
@@ -109,6 +131,17 @@ body {
   padding: 16px;
   border: 1px solid rgba(255, 255, 255, 0.06);
   box-shadow: 0 20px 60px -40px rgba(61, 120, 255, 0.45);
+  transition: all 0.3s ease;
+  backdrop-filter: blur(12px);
+}
+
+.filter-card:hover,
+.details-card:hover {
+  border-color: rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 24px 72px -44px rgba(61, 120, 255, 0.6),
+    0 0 0 1px rgba(105, 140, 255, 0.1);
+  transform: translateY(-2px);
 }
 
 .filter-card h2,
@@ -133,15 +166,26 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(15, 17, 25, 0.95);
   color: inherit;
-  transition: all 0.2s ease;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
 }
 
-.filter-field input:focus,
-.filter-field select:focus {
-  outline: none;
-  border-color: rgba(105, 140, 255, 0.5);
+.filter-field select:hover,
+.filter-field input:hover {
+  border-color: rgba(105, 140, 255, 0.4);
   background: rgba(20, 24, 33, 0.95);
-  box-shadow: 0 0 0 3px rgba(105, 140, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.filter-field select:focus,
+.filter-field input:focus {
+  outline: none;
+  border-color: rgba(105, 140, 255, 0.6);
+  background: rgba(20, 24, 33, 0.95);
+  box-shadow:
+    inset 0 1px 3px rgba(0, 0, 0, 0.3),
+    0 0 0 3px rgba(105, 140, 255, 0.2);
+  transform: translateY(-1px);
 }
 
 .filter-field input:disabled {
@@ -244,6 +288,22 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.15);
   background: rgba(15, 17, 25, 0.95);
   color: inherit;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.chat-row textarea:hover {
+  border-color: rgba(105, 140, 255, 0.3);
+  background: rgba(20, 24, 33, 0.95);
+}
+
+.chat-row textarea:focus {
+  outline: none;
+  border-color: rgba(105, 140, 255, 0.6);
+  background: rgba(20, 24, 33, 0.95);
+  box-shadow:
+    inset 0 2px 4px rgba(0, 0, 0, 0.3),
+    0 0 0 3px rgba(105, 140, 255, 0.2);
 }
 
 .chat-row .chat-controls {
@@ -260,9 +320,46 @@ body {
   border-radius: 10px;
   cursor: pointer;
   font-weight: 600;
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 4px 12px -4px rgba(102, 126, 234, 0.6),
+    0 0 0 0 rgba(102, 126, 234, 0);
 }
 
-.ask-button:disabled { opacity: 0.6; cursor: not-allowed; }
+.ask-button::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  background: linear-gradient(135deg, rgba(102,126,234,1), rgba(118,75,162,1));
+  border-radius: 12px;
+  opacity: 0;
+  z-index: -1;
+  transition: opacity 0.3s ease;
+}
+
+.ask-button:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.03);
+  box-shadow:
+    0 8px 24px -8px rgba(102, 126, 234, 0.8),
+    0 0 0 3px rgba(102, 126, 234, 0.3);
+}
+
+.ask-button:hover:not(:disabled)::before {
+  opacity: 1;
+}
+
+.ask-button:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+  transition-duration: 0.1s;
+}
+
+.ask-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+}
 
 .ai-answer {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -270,6 +367,21 @@ body {
   border-radius: 16px;
   color: white;
   border: 1px solid rgba(255,255,255,0.15);
+  animation: aiAnswerSlideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow:
+    0 8px 32px -12px rgba(102, 126, 234, 0.6),
+    0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
+@keyframes aiAnswerSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* Day Groups */
@@ -568,6 +680,73 @@ body {
 
 .ocr-engine-toggle .engine-note small {
   font-size: 0.8rem;
+}
+
+/* Enhanced checkbox styles */
+input[type="checkbox"] {
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(105, 140, 255, 0.4);
+  border-radius: 4px;
+  background: rgba(15, 17, 25, 0.95);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  flex-shrink: 0;
+}
+
+input[type="checkbox"]:hover {
+  border-color: rgba(105, 140, 255, 0.6);
+  background: rgba(20, 24, 33, 0.95);
+  transform: scale(1.1);
+}
+
+input[type="checkbox"]:checked {
+  background: linear-gradient(135deg, rgba(102, 126, 234, 0.9), rgba(118, 75, 162, 0.9));
+  border-color: rgba(102, 126, 234, 0.8);
+  box-shadow: 0 0 0 3px rgba(105, 140, 255, 0.2);
+}
+
+input[type="checkbox"]:checked::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(1);
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  animation: checkmarkPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes checkmarkPop {
+  0% {
+    transform: translate(-50%, -50%) scale(0) rotate(-45deg);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+input[type="checkbox"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Enhanced number inputs */
+input[type="number"] {
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+input[type="number"]:hover {
+  transform: translateY(-1px);
+}
+
+input[type="number"]:focus {
+  transform: translateY(-1px);
 }
 
 /* Zoom Modal */

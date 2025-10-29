@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import './SettingsPanel.css';
 
@@ -68,23 +68,8 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
   const [hasChanges, setHasChanges] = useState(false);
   const [activeTab, setActiveTab] = useState('capture');
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (isOpen) {
-      loadSettings();
-      loadStats();
-    }
-  }, [isOpen]);
-
-  const loadSettings = async () => {
-    try {
-      const res = await axios.get('/api/settings/all');
-      setSettings(normalizeSettings(res.data));
-    } catch (error) {
-      console.error('Failed to load settings:', error);
-      alert('Failed to load settings');
-    }
-  };
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const normalizeSettings = (raw: any): Settings => {
     const ocr = raw.ocr || {};
@@ -126,14 +111,40 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     };
   };
 
-  const loadStats = async () => {
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await axios.get('/api/settings/all');
+      setSettings(normalizeSettings(res.data));
+    } catch (error: any) {
+      console.error('Failed to load settings:', error);
+      const errorMessage = error?.response?.data?.detail || error?.message || 'Failed to load settings';
+      setError(errorMessage);
+      // Don't show alert - show error in UI instead
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const loadStats = useCallback(async () => {
     try {
       const res = await axios.get('/api/settings/stats');
       setStats(res.data);
     } catch (error) {
       console.error('Failed to load stats:', error);
+      // Stats failure is non-critical, just log it
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    if (isOpen) {
+      setLoading(true);
+      setError(null);
+      loadSettings();
+      loadStats();
+    }
+  }, [isOpen, loadSettings, loadStats]);
 
   const updateSetting = (category: string, key: string, value: any) => {
     if (!settings) return;
@@ -187,7 +198,7 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
     }
   };
 
-  if (!isOpen || !settings) return null;
+  if (!isOpen) return null;
 
   return (
     <div className="settings-overlay" onClick={onClose}>
@@ -197,7 +208,53 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           <button className="close-btn" onClick={onClose}>✕</button>
         </div>
 
-        {stats && (
+        {error && (
+          <div style={{
+            padding: '16px 24px',
+            background: 'rgba(255, 100, 100, 0.1)',
+            border: '1px solid rgba(255, 100, 100, 0.3)',
+            borderRadius: '8px',
+            margin: '16px 24px',
+            color: 'rgba(255, 100, 100, 0.9)'
+          }}>
+            <strong>Error loading settings:</strong> {error}
+            <button
+              onClick={loadSettings}
+              style={{
+                marginLeft: '12px',
+                padding: '4px 12px',
+                background: 'rgba(255, 100, 100, 0.2)',
+                border: '1px solid rgba(255, 100, 100, 0.4)',
+                borderRadius: '4px',
+                color: 'inherit',
+                cursor: 'pointer'
+              }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {loading && !settings && (
+          <div style={{
+            padding: '40px',
+            textAlign: 'center',
+            color: 'rgba(255, 255, 255, 0.7)'
+          }}>
+            <div className="loading-spinner" style={{
+              border: '3px solid rgba(105, 140, 255, 0.2)',
+              borderTop: '3px solid rgba(105, 140, 255, 0.8)',
+              borderRadius: '50%',
+              width: '40px',
+              height: '40px',
+              animation: 'spin 1s linear infinite',
+              margin: '0 auto 16px'
+            }}></div>
+            Loading settings...
+          </div>
+        )}
+
+        {stats && !error && (
           <div className="stats-bar">
             <span>💾 {stats.database_size_mb}MB</span>
             <span>📸 {stats.screenshot_count} screenshots</span>
@@ -207,19 +264,21 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           </div>
         )}
 
-        <div className="settings-tabs">
-          {['capture','ocr','storage','embeddings'].map(category => (
-            <button
-              key={category}
-              className={`tab ${activeTab === category ? 'active' : ''}`}
-              onClick={() => setActiveTab(category)}
-            >
-              {category.charAt(0).toUpperCase() + category.slice(1)}
-            </button>
-          ))}
-        </div>
+        {settings && (
+          <>
+            <div className="settings-tabs">
+              {['capture','ocr','storage','embeddings'].map(category => (
+                <button
+                  key={category}
+                  className={`tab ${activeTab === category ? 'active' : ''}`}
+                  onClick={() => setActiveTab(category)}
+                >
+                  {category.charAt(0).toUpperCase() + category.slice(1)}
+                </button>
+              ))}
+            </div>
 
-        <div className="settings-content">
+            <div className="settings-content">
           {/* CAPTURE SETTINGS */}
           {activeTab === 'capture' && (
             <div className="settings-section">
@@ -566,18 +625,20 @@ export function SettingsPanel({ isOpen, onClose }: SettingsPanelProps) {
           )}
 
 
-        </div>
+            </div>
 
-        <div className="settings-footer">
-          <button className="cancel-btn" onClick={onClose}>Cancel</button>
-          <button
-            className="save-btn"
-            onClick={saveSettings}
-            disabled={!hasChanges || saving}
-          >
-            {saving ? 'Saving...' : hasChanges ? 'Save Changes' : 'No Changes'}
-          </button>
-        </div>
+            <div className="settings-footer">
+              <button className="cancel-btn" onClick={onClose}>Cancel</button>
+              <button
+                className="save-btn"
+                onClick={saveSettings}
+                disabled={!hasChanges || saving}
+              >
+                {saving ? 'Saving...' : hasChanges ? 'Save Changes' : 'No Changes'}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

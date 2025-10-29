@@ -149,10 +149,28 @@ class Config:
         with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=2)
 
+    def get_all(self) -> Dict[str, Any]:
+        """Get all configuration as nested dictionary.
+        
+        Returns:
+            Dictionary containing all configuration settings
+        """
+        return self.config.copy()
+
     def reset_all(self) -> None:
         """Reset configuration to defaults."""
         self.config = DEFAULT_CONFIG.copy()
         self.save()
+
+    def reset_category(self, category: str) -> None:
+        """Reset a specific category to defaults.
+        
+        Args:
+            category: Category name (e.g., 'capture', 'ocr')
+        """
+        if category in DEFAULT_CONFIG:
+            self.config[category] = DEFAULT_CONFIG[category].copy()
+            self.save()
 
     def ensure_directories(self) -> None:
         """Ensure all required directories exist."""

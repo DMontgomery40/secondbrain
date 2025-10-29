@@ -131,6 +131,8 @@ test_output/
 # Frontend artifacts
 web/timeline/node_modules/
 web/timeline/dist/
+web/timeline/playwright-report/
+web/timeline/test-results/
 .feature-tracking.md
 
 # Testing artifacts (git-ignored test documentation)

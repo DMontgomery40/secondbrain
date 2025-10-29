@@ -18,10 +18,18 @@ export function DailyStats({ date }: DailyStatsProps) {
   const statsQuery = useQuery({
     queryKey: ["daily-stats", date],
     queryFn: async () => {
-      const response = await axios.get(`/api/stats/daily?date=${date}`);
-      return response.data as DailyStatsData;
+      if (!date) return null;
+      try {
+        const response = await axios.get(`/api/stats/daily?date=${date}`);
+        return response.data as DailyStatsData;
+      } catch (error: any) {
+        console.error("Error fetching daily stats:", error);
+        // Don't throw - return null to silently fail
+        return null;
+      }
     },
     enabled: !!date,
+    retry: false,
   });
 
   if (!date || statsQuery.isLoading) {

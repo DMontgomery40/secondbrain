@@ -83,11 +83,22 @@ def create_app() -> FastAPI:
 
     @app.get("/api/frames/{frame_id}/text")
     def get_frame_text(frame_id: str, db: Database = Depends(get_db)):
-        frame = db.get_frame(frame_id)
-        if not frame:
-            raise HTTPException(status_code=404, detail="Frame not found")
-        blocks = db.get_text_blocks_by_frame(frame_id)
-        return {"frame_id": frame_id, "blocks": blocks}
+        try:
+            frame = db.get_frame(frame_id)
+            if not frame:
+                raise HTTPException(status_code=404, detail="Frame not found")
+            blocks = db.get_text_blocks_by_frame(frame_id)
+            return {"frame_id": frame_id, "blocks": blocks}
+        except HTTPException:
+            # propagate 404s
+            raise
+        except Exception as e:  # Be resilient to transient DB issues
+            import logging
+            logging.getLogger(__name__).warning(
+                f"get_frame_text_failed frame_id={frame_id} error={e}"
+            )
+            # Return empty list instead of 500 to avoid breaking UI
+            return {"frame_id": frame_id, "blocks": []}
 
     @app.get("/api/apps")
     def list_apps(limit: int = Query(50, ge=1, le=200), db: Database = Depends(get_db)):
@@ -97,18 +108,23 @@ def create_app() -> FastAPI:
     @app.get("/api/settings/all")
     def get_all_settings():
         """Get ALL settings as nested JSON."""
-        settings = config.get_all()
+        try:
+            settings = config.get_all()
 
-        # Add computed paths
-        settings["_paths"] = {
-            "database": str(config.get_database_dir() / "memory.db"),
-            "screenshots": str(config.get_frames_dir()),
-            "embeddings": str(config.get_embeddings_dir()),
-            "logs": str(config.get_logs_dir()),
-            "config": str(config.config_path),
-        }
+            # Add computed paths
+            settings["_paths"] = {
+                "database": str(config.get_database_dir() / "memory.db"),
+                "screenshots": str(config.get_frames_dir()),
+                "embeddings": str(config.get_embeddings_dir()),
+                "logs": str(config.get_logs_dir()),
+                "config": str(config.config_path),
+            }
 
-        return settings
+            return settings
+        except Exception as e:
+            import traceback
+            error_detail = f"Error loading settings: {str(e)}\n{traceback.format_exc()}"
+            raise HTTPException(status_code=500, detail=error_detail)
 
     @app.get("/api/settings/defaults")
     def get_default_settings():
@@ -546,51 +562,95 @@ def create_app() -> FastAPI:
             model = "gpt-5"
             response = client.responses.create(
                 model=model,
-                input=[
-                    {
-                        "role": "developer",
-                        "content": "You are an expert assistant analyzing OCR from screen captures. Be specific and cite evidence.",
-                    },
-                    {
-                        "role": "user",
-                        "content": f"Based on my screen activity, please answer: {query}\n\n{apps_summary}\n\nOCR Text (by relevance):\n{context_text}\n\nAnswer directly and cite snippets.",
-                    },
-                ],
-                text={"verbosity": "medium"},
+                instructions=(
+                    "You are an expert assistant analyzing computer activity through OCR text. "
+                    "You see the ACTUAL content from the user's screen - code, commands, documents, web pages, etc. "
+                    "Provide specific, actionable answers based on this evidence."
+                ),
+                input=(
+                    f"Based on my screen activity, please answer: {query}\n\n"
+                    f"{apps_summary}\n\n"
+                    f"OCR Text from my screen (organized by relevance):\n{context_text}\n\n"
+                    "Provide a specific, detailed answer. Reference the actual text you see. "
+                    "If you notice patterns or workflows, describe them. Include file names, commands, or code changes when relevant."
+                ),
+                max_output_tokens=2000,
             )
-            # Extract text from response.output
+            # Extract text from response - comprehensive extraction
             import logging
 
             logger = logging.getLogger(__name__)
 
             answer = None
-            if hasattr(response, "output") and response.output:
-                for output_item in response.output:
+            
+            # Method 1: Try output_text attribute (simplest)
+            if hasattr(response, "output_text") and response.output_text:
+                answer = str(response.output_text).strip()
+                logger.debug(f"Extracted answer from output_text: {answer[:100]}...")
+            
+            # Method 2: Extract from response.output structure
+            if not answer and hasattr(response, "output") and response.output:
+                logger.debug(f"Response has output attribute with {len(response.output)} items")
+                for idx, output_item in enumerate(response.output):
+                    logger.debug(f"Processing output_item[{idx}]: type={type(output_item)}, has content={hasattr(output_item, 'content')}")
+                    
                     if hasattr(output_item, "content"):
-                        # content is a list of content items, iterate through them
-                        if isinstance(output_item.content, list):
-                            for content_item in output_item.content:
-                                if hasattr(content_item, "text"):
-                                    answer = content_item.text
+                        content = output_item.content
+                        logger.debug(f"  content type: {type(content)}, is list: {isinstance(content, list)}")
+                        
+                        if isinstance(content, list):
+                            for content_idx, content_item in enumerate(content):
+                                logger.debug(f"    content_item[{content_idx}]: type={type(content_item)}, has text={hasattr(content_item, 'text')}")
+                                if hasattr(content_item, "text") and content_item.text:
+                                    answer = str(content_item.text).strip()
+                                    logger.debug(f"    Found text in content_item[{content_idx}]: {answer[:100]}...")
                                     break
-                        else:
-                            # Fallback if content is a string directly
-                            answer = str(output_item.content)
+                        elif hasattr(content, "text") and content.text:
+                            answer = str(content.text).strip()
+                            logger.debug(f"Found text in content: {answer[:100]}...")
+                        elif isinstance(content, str):
+                            answer = content.strip()
+                            logger.debug(f"Content is string: {answer[:100]}...")
+                        
                         if answer:
                             break
+            
+            # Method 3: Try to get text from response directly
+            if not answer and hasattr(response, "text"):
+                answer = str(response.text).strip()
+                logger.debug(f"Extracted from response.text: {answer[:100]}...")
+            
+            # Method 4: Last resort - try to find any text attribute in the response
             if not answer:
-                # Log the response structure for debugging
-                logger.warning(
-                    f"Failed to extract answer from response. Response structure: {response}"
+                # Check all attributes of the response object
+                for attr_name in dir(response):
+                    if attr_name.startswith('_') or attr_name in ['output', 'output_text', 'text']:
+                        continue
+                    try:
+                        attr_value = getattr(response, attr_name)
+                        if isinstance(attr_value, str) and attr_value.strip() and len(attr_value.strip()) > 10:
+                            answer = attr_value.strip()
+                            logger.debug(f"Found text in response.{attr_name}: {answer[:100]}...")
+                            break
+                    except:
+                        pass
+            
+            # Log what we found
+            if answer:
+                logger.info(f"Successfully extracted answer ({len(answer)} chars)")
+            else:
+                logger.error(
+                    f"Failed to extract answer. Response structure: output_text={getattr(response, 'output_text', 'N/A')}, "
+                    f"has output={hasattr(response, 'output')}, output type={type(getattr(response, 'output', None))}"
                 )
-                logger.warning(
-                    f"Response output: {response.output if hasattr(response, 'output') else 'No output attr'}"
-                )
-                # Fallback to string representation if structure is different
-                if hasattr(response, "output") and response.output is not None:
-                    answer = str(response.output)
-                else:
-                    answer = "Unable to extract answer from AI response. Please check server logs."
+                if hasattr(response, "output") and response.output:
+                    logger.error(f"Output items: {[type(item).__name__ for item in response.output]}")
+                    # Try to print the actual structure for debugging
+                    try:
+                        import json
+                        logger.error(f"Response output (first 500 chars): {str(response.output)[:500]}")
+                    except:
+                        pass
             if not answer or not answer.strip():
                 # condensed retry
                 condensed = []
@@ -607,45 +667,69 @@ def create_app() -> FastAPI:
                 condensed_ctx = "\n\n".join(condensed)
                 response2 = client.responses.create(
                     model=model,
-                    input=[
-                        {
-                            "role": "developer",
-                            "content": "Answer succinctly using provided short OCR snippets.",
-                        },
-                        {
-                            "role": "user",
-                            "content": f"Question: {query}\n\nEvidence:\n{condensed_ctx}",
-                        },
-                    ],
-                    text={"verbosity": "low"},
+                    instructions=(
+                        "Answer succinctly using provided short OCR snippets."
+                    ),
+                    input=(
+                        f"Question: {query}\n\nEvidence:\n{condensed_ctx}"
+                    ),
+                    max_output_tokens=1000,
                 )
-                # Extract text from retry response
+                # Extract text from retry response - comprehensive extraction
                 answer = None
-                if hasattr(response2, "output") and response2.output:
+                
+                # Method 1: Try output_text attribute
+                if hasattr(response2, "output_text") and response2.output_text:
+                    answer = str(response2.output_text).strip()
+                    logger.debug(f"Retry: Extracted from output_text: {answer[:100]}...")
+                
+                # Method 2: Extract from response.output structure
+                if not answer and hasattr(response2, "output") and response2.output:
                     for output_item in response2.output:
                         if hasattr(output_item, "content"):
-                            # content is a list of content items, iterate through them
-                            if isinstance(output_item.content, list):
-                                for content_item in output_item.content:
-                                    if hasattr(content_item, "text"):
-                                        answer = content_item.text
+                            content = output_item.content
+                            if isinstance(content, list):
+                                for content_item in content:
+                                    if hasattr(content_item, "text") and content_item.text:
+                                        answer = str(content_item.text).strip()
                                         break
-                            else:
-                                # Fallback if content is a string directly
-                                answer = str(output_item.content)
+                            elif hasattr(content, "text") and content.text:
+                                answer = str(content.text).strip()
+                            elif isinstance(content, str):
+                                answer = content.strip()
                             if answer:
                                 break
+                
+                # Method 3: Try response.text
+                if not answer and hasattr(response2, "text"):
+                    answer = str(response2.text).strip()
+                
+                # Method 4: Last resort - scan all attributes
                 if not answer:
-                    logger.warning(
-                        f"Failed to extract answer from retry response. Response structure: {response2}"
+                    for attr_name in dir(response2):
+                        if attr_name.startswith('_') or attr_name in ['output', 'output_text', 'text']:
+                            continue
+                        try:
+                            attr_value = getattr(response2, attr_name)
+                            if isinstance(attr_value, str) and attr_value.strip() and len(attr_value.strip()) > 10:
+                                answer = attr_value.strip()
+                                logger.debug(f"Retry: Found text in response2.{attr_name}")
+                                break
+                        except:
+                            pass
+                
+                if not answer or not answer.strip():
+                    logger.error(
+                        f"Retry also failed. output_text={getattr(response2, 'output_text', 'N/A')}, "
+                        f"has output={hasattr(response2, 'output')}"
                     )
-                    logger.warning(
-                        f"Response2 output: {response2.output if hasattr(response2, 'output') else 'No output attr'}"
-                    )
-                    if hasattr(response2, "output") and response2.output is not None:
-                        answer = str(response2.output)
-                    else:
-                        answer = "Unable to extract answer from AI response after retry. Please check server logs."
+                    if hasattr(response2, "output") and response2.output:
+                        logger.error(f"Retry output items: {[type(item).__name__ for item in response2.output]}")
+                        try:
+                            logger.error(f"Retry response output (first 500 chars): {str(response2.output)[:500]}")
+                        except:
+                            pass
+                    answer = None
         except Exception as exc:
             raise HTTPException(status_code=500, detail=f"AI answer failed: {exc}")
 
