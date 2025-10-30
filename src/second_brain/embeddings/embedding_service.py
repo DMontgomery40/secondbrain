@@ -29,11 +29,7 @@ class EmbeddingService:
     """Service for creating and searching embeddings."""
     
     def __init__(self, config: Optional[Config] = None):
-        """Initialize embedding service.
-        
-        Args:
-            config: Configuration instance. If None, uses global config.
-        """
+
         self.config = config or Config()
         
         if not self.config.get("embeddings.enabled", True):
@@ -107,7 +103,7 @@ class EmbeddingService:
         )
 
     def _ensure_reranker_loaded(self) -> None:
-        """Lazily load the reranker only if requested and enabled."""
+
         if not self.reranker_enabled or self._reranker is not None:
             return
         try:
@@ -125,7 +121,7 @@ class EmbeddingService:
             self.reranker_enabled = False
 
     def _embed_texts(self, texts: List[str]) -> List[List[float]]:
-        """Embed a batch of texts using configured provider."""
+
         if self.provider == "sbert":
             assert self._sbert_model is not None
             return self._sbert_model.encode(
@@ -306,11 +302,7 @@ class EmbeddingService:
             return []
     
     def delete_frame_blocks(self, frame_id: int) -> None:
-        """Delete all text blocks for a frame.
-        
-        Args:
-            frame_id: Frame ID to delete blocks for
-        """
+
         if not self.enabled:
             return
         
@@ -329,11 +321,7 @@ class EmbeddingService:
             logger.error("delete_failed", frame_id=frame_id, error=str(e))
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get embedding service statistics.
-        
-        Returns:
-            Dictionary with statistics
-        """
+
         if not self.enabled:
             return {"enabled": False}
         
@@ -347,10 +335,7 @@ class EmbeddingService:
         }
 
     def rerank(self, query: str, texts: List[str]) -> List[float]:
-        """Compute rerank scores for query over a list of texts.
 
-        Returns a list of scores aligned with texts.
-        """
         if not (self.reranker_enabled and self._reranker):
             logger.warning("rerank_called_but_disabled")
             return [0.0 for _ in texts]

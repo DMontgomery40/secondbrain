@@ -25,11 +25,7 @@ class AppleVisionOCR:
     """OCR service using Apple's Vision framework (local, fast, free)."""
 
     def __init__(self, config: Optional[Config] = None):
-        """Initialize Apple Vision OCR service.
-        
-        Args:
-            config: Configuration instance. If None, uses global config.
-        """
+
         self.config = config or Config()
         
         # Configuration
@@ -266,5 +262,5 @@ class AppleVisionOCR:
         return results
 
     async def close(self) -> None:
-        """Cleanup (no resources to release for local OCR)."""
+
         pass

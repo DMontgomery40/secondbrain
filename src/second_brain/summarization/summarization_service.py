@@ -24,11 +24,7 @@ class SummarizationService:
     """Service for generating AI summaries of captured activity."""
     
     def __init__(self, config: Optional[Config] = None):
-        """Initialize summarization service.
-        
-        Args:
-            config: Configuration instance
-        """
+
         self.config = config or Config()
         
         # Get API key
@@ -225,7 +221,7 @@ Provide a brief 2-3 sentence summary."""
         return summary_id
     
     async def summarization_loop(self, database: Database):
-        """Main loop that generates summaries periodically."""
+
         logger.info("summarization_loop_started")
         self.running = True
         
@@ -255,20 +251,16 @@ Provide a brief 2-3 sentence summary."""
         logger.info("summarization_loop_stopped", summaries_generated=self.summaries_generated)
     
     def stop(self):
-        """Stop the summarization loop."""
+
         logger.info("stopping_summarization_service")
         self.running = False
     
     async def close(self):
-        """Close the OpenAI client."""
+
         await self.client.close()
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get summarization statistics.
-        
-        Returns:
-            Dictionary with statistics
-        """
+
         return {
             "running": self.running,
             "summaries_generated": self.summaries_generated,

@@ -17,7 +17,7 @@ config = Config()
 
 
 def create_app() -> FastAPI:
-    """Create the FastAPI application."""
+
     app = FastAPI(
         title="Second Brain API",
         description="Local API for timeline visualization and search",
@@ -37,6 +37,7 @@ def create_app() -> FastAPI:
     app.mount("/frames", StaticFiles(directory=str(frames_dir)), name="frames")
 
     def get_db() -> Generator[Database, None, None]:
+
         db = Database(config=config)
         try:
             yield db
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/frames")
     def list_frames(
+
         limit: int = Query(200, ge=1, le=1000),
         app_bundle_id: Optional[str] = Query(None),
         start: Optional[int] = Query(
@@ -74,6 +76,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/frames/{frame_id}")
     def get_frame(frame_id: str, db: Database = Depends(get_db)):
+
         frame = db.get_frame(frame_id)
         if not frame:
             raise HTTPException(status_code=404, detail="Frame not found")
@@ -83,6 +86,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/frames/{frame_id}/text")
     def get_frame_text(frame_id: str, db: Database = Depends(get_db)):
+
         try:
             frame = db.get_frame(frame_id)
             if not frame:
@@ -102,12 +106,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/apps")
     def list_apps(limit: int = Query(50, ge=1, le=200), db: Database = Depends(get_db)):
+
         stats = db.get_app_usage_stats(limit=limit)
         return {"apps": stats}
 
     @app.get("/api/settings/all")
     def get_all_settings():
-        """Get ALL settings as nested JSON."""
+
         try:
             settings = config.get_all()
 
@@ -128,18 +133,19 @@ def create_app() -> FastAPI:
 
     @app.get("/api/settings/defaults")
     def get_default_settings():
-        """Return the built-in default settings (source of truth for UI defaults)."""
+
         return DEFAULT_CONFIG
 
     @app.post("/api/settings/update")
     def update_settings(settings: dict):
-        """Update multiple settings at once with basic validation."""
+
         if not isinstance(settings, dict):
             raise HTTPException(status_code=400, detail="Invalid payload")
 
         field_errors: dict[str, str] = {}
 
         def add_error(path: str, msg: str) -> None:
+
             field_errors[path] = msg
 
         # Basic validations for known fields
@@ -197,11 +203,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/settings/reset")
     def reset_settings(category: str = None):
-        """Reset settings to defaults.
 
-        Args:
-            category: Category to reset (e.g., 'capture'), or None to reset all
-        """
         if category:
             config.reset_category(category)
             return {
@@ -214,7 +216,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/settings/stats")
     def get_system_stats(db: Database = Depends(get_db)):
-        """Get system statistics for display in settings."""
+
         import psutil
         import importlib
 
@@ -258,17 +260,13 @@ def create_app() -> FastAPI:
 
     @app.get("/api/settings/ocr-engine")
     def get_ocr_engine():
-        """Get current OCR engine setting."""
+
         engine = config.get("ocr.engine", "apple")
         return {"engine": engine}
 
     @app.post("/api/settings/ocr-engine")
     def set_ocr_engine(engine: str):
-        """Switch OCR engine on the fly.
 
-        Args:
-            engine: Either 'apple' or 'deepseek'
-        """
         if engine not in ["apple", "deepseek"]:
             raise HTTPException(
                 status_code=400, detail="Invalid engine. Must be 'apple' or 'deepseek'"
@@ -286,6 +284,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/summaries")
     def get_summaries(
+
         date: Optional[str] = Query(None, description="Date in YYYY-MM-DD format"),
         summary_type: Optional[str] = Query(
             None, description="Type of summary: hourly, daily, or session"
@@ -346,6 +345,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/stats/daily")
     def get_daily_stats(
+
         date: str = Query(..., description="Date in YYYY-MM-DD format"),
         db: Database = Depends(get_db),
     ):
@@ -405,6 +405,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/search")
     def search(
+
         payload: dict = Body(...),
         db: Database = Depends(get_db),
     ):
@@ -485,6 +486,7 @@ def create_app() -> FastAPI:
 
     @app.post("/api/ask")
     def ask(
+
         payload: dict = Body(...),
         db: Database = Depends(get_db),
     ):
@@ -521,6 +523,7 @@ def create_app() -> FastAPI:
 
         # Prepare context with sanitization
         def _sanitize(s: str) -> str:
+
             return "".join(
                 ch
                 if (

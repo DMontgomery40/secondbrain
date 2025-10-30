@@ -30,11 +30,7 @@ class CaptureService:
     """Service for capturing screenshots and window metadata."""
 
     def __init__(self, config: Optional[Config] = None):
-        """Initialize capture service.
-        
-        Args:
-            config: Configuration instance. If None, uses global config.
-        """
+
         self.config = config or Config()
         self.config.ensure_directories()
         self.frames_dir = self.config.get_frames_dir()
@@ -81,7 +77,7 @@ class CaptureService:
         )
 
     def _calculate_frames_dir_size(self) -> int:
-        """Calculate total size of frames directory once at startup."""
+
         total_size = 0
         if not self.frames_dir.exists():
             return total_size
@@ -94,11 +90,7 @@ class CaptureService:
         return total_size
 
     def _get_active_window_info(self) -> Dict[str, Any]:
-        """Get information about the active window using macOS APIs.
-        
-        Returns:
-            Dictionary with window information
-        """
+
         try:
             # Get list of all windows
             window_list = CGWindowListCopyWindowInfo(
@@ -146,11 +138,7 @@ class CaptureService:
             }
 
     def _get_screen_resolution(self) -> str:
-        """Get screen resolution.
-        
-        Returns:
-            Resolution string like "1920x1080"
-        """
+
         if self._screen_resolution_cache:
             return self._screen_resolution_cache
         
@@ -182,11 +170,7 @@ class CaptureService:
         return self._screen_resolution_cache
 
     def _check_disk_space(self) -> bool:
-        """Check if there's enough disk space to continue capturing.
-        
-        Returns:
-            True if there's enough space, False otherwise
-        """
+
         try:
             # Get disk usage for the frames directory
             disk_usage = psutil.disk_usage(str(self.frames_dir))
@@ -239,11 +223,7 @@ class CaptureService:
         return date_dir / filename
 
     async def capture_frame(self) -> Optional[Dict[str, Any]]:
-        """Capture a single frame with metadata.
-        
-        Returns:
-            Frame metadata dictionary or None if capture failed
-        """
+
         # Check disk space
         if not self._check_disk_space():
             logger.warning("capture_paused_disk_space")
@@ -343,7 +323,7 @@ class CaptureService:
             return None
 
     async def capture_loop(self):
-        """Main capture loop that runs continuously with adaptive FPS."""
+
         logger.info("capture_loop_started", fps=self.fps, adaptive_fps=self.enable_adaptive_fps)
         self.running = True
         
@@ -370,16 +350,12 @@ class CaptureService:
         logger.info("capture_loop_stopped", total_frames=self.frames_captured, frames_skipped=self.frames_skipped)
 
     def stop(self):
-        """Stop the capture loop."""
+
         logger.info("stopping_capture_service")
         self.running = False
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get capture service statistics.
-        
-        Returns:
-            Dictionary with statistics
-        """
+
         stats = {
             "running": self.running,
             "frames_captured": self.frames_captured,

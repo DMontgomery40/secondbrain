@@ -21,11 +21,7 @@ class VideoCaptureService:
     """Service for capturing screen directly to H.264 video segments."""
     
     def __init__(self, config: Optional[Config] = None):
-        """Initialize video capture service.
-        
-        Args:
-            config: Configuration instance
-        """
+
         self.config = config or Config()
         self.config.ensure_directories()
         
@@ -114,11 +110,7 @@ class VideoCaptureService:
             return False
     
     async def _finalize_segment(self) -> Optional[Path]:
-        """Finalize the current video segment.
-        
-        Returns:
-            Path to finalized segment or None
-        """
+
         if not self.current_process or not self.current_segment_path:
             return None
         
@@ -158,7 +150,7 @@ class VideoCaptureService:
             return None
     
     async def capture_loop(self):
-        """Main capture loop that records video segments."""
+
         logger.info("video_capture_loop_started")
         self.running = True
         
@@ -184,16 +176,12 @@ class VideoCaptureService:
         logger.info("video_capture_loop_stopped", segments_created=self.segments_created)
     
     def stop(self):
-        """Stop the capture loop."""
+
         logger.info("stopping_video_capture_service")
         self.running = False
     
     def get_stats(self) -> Dict[str, Any]:
-        """Get capture statistics.
-        
-        Returns:
-            Dictionary with statistics
-        """
+
         return {
             "running": self.running,
             "segments_created": self.segments_created,

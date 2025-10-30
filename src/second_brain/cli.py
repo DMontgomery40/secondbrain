@@ -30,11 +30,7 @@ load_dotenv()
 
 
 def filter_by_level(logger, method_name, event_dict):
-    """Filter logs based on DEBUG environment variable.
-    
-    By default, only show warnings and errors.
-    Set DEBUG=1 to see all logs including info and debug.
-    """
+
     if os.getenv("DEBUG", "").lower() in ("1", "true", "yes"):
         return event_dict
     
@@ -63,12 +59,12 @@ logger = structlog.get_logger()
 
 
 def get_pid_file() -> Path:
-    """Get path to PID file."""
+
     return Path.home() / "Library" / "Application Support" / "second-brain" / "second-brain.pid"
 
 
 def _read_pid_file(pid_file: Path) -> tuple[int, Optional[float]]:
-    """Read PID file and return PID with optional create time."""
+
     pid_raw = pid_file.read_text().strip()
     expected_create_time: Optional[float] = None
 
@@ -86,7 +82,7 @@ def _read_pid_file(pid_file: Path) -> tuple[int, Optional[float]]:
 
 
 def is_running() -> bool:
-    """Check if service is running."""
+
     pid_file = get_pid_file()
     if not pid_file.exists():
         return False
@@ -107,7 +103,7 @@ def is_running() -> bool:
 
 
 def save_pid():
-    """Save current process PID."""
+
     pid_file = get_pid_file()
     pid_file.parent.mkdir(parents=True, exist_ok=True)
     process = psutil.Process(os.getpid())
@@ -117,7 +113,7 @@ def save_pid():
 
 
 def remove_pid():
-    """Remove PID file."""
+
     pid_file = get_pid_file()
     pid_file.unlink(missing_ok=True)
 
@@ -125,14 +121,14 @@ def remove_pid():
 @click.group()
 @click.version_option(version="0.1.0")
 def main():
-    """Second Brain - Local-first visual memory capture and search."""
+
     pass
 
 
 @main.command()
 @click.option("--fps", type=float, help="Frames per second to capture")
 def start(fps: Optional[float]):
-    """Start the capture service."""
+
     if is_running():
         console.print("[yellow]Service is already running[/yellow]")
         return
@@ -157,6 +153,7 @@ def start(fps: Optional[float]):
     
     # Setup signal handlers
     def signal_handler(sig, frame):
+
         console.print("\n[yellow]Stopping service...[/yellow]")
         asyncio.create_task(pipeline.stop())
     
@@ -165,6 +162,7 @@ def start(fps: Optional[float]):
     
     # Start pipeline
     async def run():
+
         try:
             await pipeline.start()
             
@@ -193,7 +191,7 @@ def start(fps: Optional[float]):
 
 @main.command()
 def stop():
-    """Stop the capture service."""
+
     if not is_running():
         console.print("[yellow]Service is not running[/yellow]")
         return
@@ -227,7 +225,7 @@ def stop():
 
 @main.command()
 def status():
-    """Show service status."""
+
     if not is_running():
         console.print("[yellow]Service is not running[/yellow]")
         return
@@ -277,7 +275,7 @@ def status():
 @click.option("--semantic", is_flag=True, help="Use semantic vector search")
 @click.option("--reranker", is_flag=True, help="Use AI reranking for better relevance (requires FlagEmbedding)")
 def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Optional[str], limit: int, semantic: bool, reranker: bool):
-    """Search captured memory."""
+
     console.print(f"[cyan]Searching for:[/cyan] {query}")
     
     # Parse dates
@@ -380,6 +378,7 @@ def query(query: str, app: Optional[str], from_date: Optional[str], to_date: Opt
                 
                 # Sanitize function to avoid problematic control chars for LLMs
                 def _sanitize_text(s: str) -> str:
+
                     return "".join(
                         ch if (
                             ch == "\n" or 32 <= ord(ch) <= 126 or (ord(ch) >= 160 and ord(ch) not in (0xFFFF, 0xFFFE))
@@ -510,7 +509,7 @@ Content:
 @click.option("--date", help="Date to convert (YYYY-MM-DD). If not provided, converts yesterday.")
 @click.option("--keep-frames", is_flag=True, help="Keep original frames after conversion")
 def convert_to_video(date: Optional[str], keep_frames: bool):
-    """Convert captured frames to H.264 video for storage efficiency."""
+
     from datetime import datetime, timedelta
     from .video.simple_video_capture import VideoConverter
     
@@ -542,6 +541,7 @@ def convert_to_video(date: Optional[str], keep_frames: bool):
     
     # Convert
     async def do_conversion():
+
         result = await converter.convert_day_to_video(target_date)
         if result:
             console.print(f"[green]✓ Video created: {result}[/green]")
@@ -558,7 +558,7 @@ def convert_to_video(date: Optional[str], keep_frames: bool):
 
 @main.command()
 def health():
-    """Check system health."""
+
     console.print("[cyan]Checking system health...[/cyan]\n")
     
     checks = []
@@ -614,7 +614,7 @@ def health():
 @main.command()
 @click.option("--port", default=8501, show_default=True, type=int)
 def ui(port: int):
-    """Launch the Streamlit UI for daily summaries and visual timeline."""
+
     import subprocess
     import sys
     
@@ -648,7 +648,7 @@ def ui(port: int):
 @click.option("--port", default=8000, show_default=True, type=int)
 @click.option("--no-open", is_flag=True, help="Do not open the browser automatically")
 def timeline(host: str, port: int, no_open: bool):
-    """Launch the timeline visualization server (React UI)."""
+
     try:
         from uvicorn import Config as UvicornConfig, Server as UvicornServer
     except ImportError as exc:
@@ -682,7 +682,7 @@ def timeline(host: str, port: int, no_open: bool):
 @main.command()
 @click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt")
 def reset(yes: bool):
-    """Reset Second Brain by deleting all captured data and database."""
+
     import shutil
     
     console.print("[yellow]Second Brain Reset[/yellow]\n")

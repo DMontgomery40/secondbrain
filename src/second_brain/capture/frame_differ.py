@@ -86,11 +86,7 @@ class FrameDiffer:
             return True
     
     def get_stats(self) -> dict:
-        """Get frame differ statistics.
-        
-        Returns:
-            Dictionary with statistics
-        """
+
         total = self.frames_captured + self.frames_skipped
         skip_rate = (self.frames_skipped / total * 100) if total > 0 else 0
         

@@ -29,7 +29,7 @@ class Database:
         self._initialize_db()
 
     def _initialize_db(self) -> None:
-        """Initialize database with schema."""
+
         # Allow connections to be used across threads (required for FastAPI async)
         self.conn = sqlite3.connect(str(self.db_path), check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
@@ -55,7 +55,7 @@ class Database:
         logger.info("database_initialized", db_path=str(self.db_path), wal_mode=True)
 
     def close(self) -> None:
-        """Close database connection."""
+
         if self.conn:
             try:
                 self.conn.close()
@@ -72,11 +72,11 @@ class Database:
                 self.conn = None
 
     def __enter__(self):
-        """Context manager entry."""
+
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """Context manager exit."""
+
         self.close()
 
     # Compression helpers
@@ -281,7 +281,7 @@ class Database:
         return [dict(row) for row in cursor.fetchall()]
 
     def get_text_block(self, block_id: str) -> Optional[Dict[str, Any]]:
-        """Get a single text block by ID."""
+
         cursor = self.conn.cursor()
         cursor.execute(
             "SELECT * FROM text_blocks WHERE block_id = ?",
@@ -291,6 +291,7 @@ class Database:
         return dict(row) if row else None
 
     def get_frames(
+
         self,
         limit: int = 500,
         app_bundle_id: Optional[str] = None,
@@ -451,11 +452,7 @@ class Database:
     # Maintenance operations
 
     def get_database_stats(self) -> Dict[str, Any]:
-        """Get database statistics.
 
-        Returns:
-            Dictionary with database statistics
-        """
         cursor = self.conn.cursor()
 
         # Get counts
@@ -511,7 +508,7 @@ class Database:
         return deleted
 
     def vacuum(self) -> None:
-        """Vacuum database to reclaim space."""
+
         self.conn.execute("VACUUM")
         logger.info("database_vacuumed")
 

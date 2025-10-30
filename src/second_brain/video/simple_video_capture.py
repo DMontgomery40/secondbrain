@@ -22,11 +22,7 @@ class VideoConverter:
     """Converts captured frames to H.264 video segments using ffmpeg."""
     
     def __init__(self, config: Optional[Config] = None):
-        """Initialize video converter.
-        
-        Args:
-            config: Configuration instance
-        """
+
         self.config = config or Config()
         self.frames_dir = self.config.get_frames_dir()
         self.video_dir = self.frames_dir.parent / "videos"
@@ -45,11 +41,7 @@ class VideoConverter:
         )
     
     def _check_ffmpeg_available(self) -> bool:
-        """Check if ffmpeg is installed.
-        
-        Returns:
-            True if ffmpeg is available
-        """
+
         try:
             result = subprocess.run(
                 ["ffmpeg", "-version"],

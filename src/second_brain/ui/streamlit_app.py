@@ -189,13 +189,13 @@ class SecondBrainUI:
     """Streamlit UI for Second Brain."""
     
     def __init__(self):
-        """Initialize UI."""
+
         self.db_path = Path.home() / "Library/Application Support/second-brain/database/memory.db"
         self.frames_dir = Path.home() / "Library/Application Support/second-brain/frames"
         self.conn = None
         
     def connect_db(self):
-        """Connect to database."""
+
         if not self.db_path.exists():
             st.error("Database not found. Please start Second Brain first.")
             st.stop()
@@ -205,7 +205,7 @@ class SecondBrainUI:
     
     @st.cache_data(ttl=60)
     def get_daily_stats(_self, date: datetime) -> Dict[str, Any]:
-        """Get statistics for a specific day."""
+
         start_ts = int(date.replace(hour=0, minute=0, second=0).timestamp())
         end_ts = int(date.replace(hour=23, minute=59, second=59).timestamp())
 
@@ -322,11 +322,7 @@ class SecondBrainUI:
 
     @st.cache_data(ttl=60)
     def get_apps_for_day(_self, date: datetime) -> Dict[str, str]:
-        """Get mapping of app names to bundle IDs for a specific day.
-        
-        Returns:
-            Dict mapping app_name -> app_bundle_id
-        """
+
         start_ts = int(date.replace(hour=0, minute=0, second=0).timestamp())
         end_ts = int(date.replace(hour=23, minute=59, second=59).timestamp())
 
@@ -341,7 +337,7 @@ class SecondBrainUI:
     
     @st.cache_data(ttl=60)
     def get_text_for_frame(_self, frame_id: str) -> List[Dict[str, Any]]:
-        """Get text blocks for a frame."""
+
         cursor = _self.conn.cursor()
         cursor.execute("""
             SELECT * FROM text_blocks
@@ -351,10 +347,7 @@ class SecondBrainUI:
         return [dict(row) for row in cursor.fetchall()]
     
     def render_settings_panel(self):
-        """Render the settings panel with full config sync.
-        
-        This panel reads from and writes to the config system bidirectionally.
-        """
+
         config = get_config()
         
         # Initialize session state for settings
@@ -598,7 +591,7 @@ class SecondBrainUI:
         return [dict(row) for row in cursor.fetchall()]
     
     def run(self):
-        """Run the Streamlit app."""
+
         self.connect_db()
         
         # Header
@@ -876,6 +869,7 @@ class SecondBrainUI:
                             # Group results by relevance and provide rich context
                             # Sanitize function to avoid problematic control chars for LLMs
                             def _sanitize_text(s: str) -> str:
+
                                 return "".join(
                                     ch if (
                                         ch == "\n" or 32 <= ord(ch) <= 126 or (ord(ch) >= 160 and ord(ch) not in (0xFFFF, 0xFFFE))
@@ -1330,7 +1324,7 @@ Content:
 
 
 def main():
-    """Main entry point."""
+
     ui = SecondBrainUI()
     ui.run()
 

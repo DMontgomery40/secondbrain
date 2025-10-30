@@ -47,46 +47,42 @@ class Config:
     """Configuration manager for Second Brain."""
 
     def __init__(self, config_path: Path | None = None):
-        """Initialize configuration.
-        
-        Args:
-            config_path: Path to configuration file. If None, uses default location.
-        """
+
         self.config_path = config_path or self.get_default_config_path()
         self.config = self._load_config()
 
     @staticmethod
     def get_default_config_path() -> Path:
-        """Get default configuration file path."""
+
         return Path.home() / "Library" / "Application Support" / "second-brain" / "config" / "settings.json"
 
     @staticmethod
     def get_data_dir() -> Path:
-        """Get data directory path."""
+
         return Path.home() / "Library" / "Application Support" / "second-brain"
 
     @staticmethod
     def get_frames_dir() -> Path:
-        """Get frames directory path."""
+
         return Config.get_data_dir() / "frames"
 
     @staticmethod
     def get_database_dir() -> Path:
-        """Get database directory path."""
+
         return Config.get_data_dir() / "database"
 
     @staticmethod
     def get_embeddings_dir() -> Path:
-        """Get embeddings directory path."""
+
         return Config.get_data_dir() / "embeddings"
 
     @staticmethod
     def get_logs_dir() -> Path:
-        """Get logs directory path."""
+
         return Config.get_data_dir() / "logs"
 
     def _load_config(self) -> Dict[str, Any]:
-        """Load configuration from file or create default."""
+
         if self.config_path.exists():
             with open(self.config_path, "r") as f:
                 user_config = json.load(f)
@@ -102,7 +98,7 @@ class Config:
             return DEFAULT_CONFIG.copy()
 
     def _deep_merge(self, base: Dict, update: Dict) -> None:
-        """Deep merge update dict into base dict."""
+
         for key, value in update.items():
             if key in base and isinstance(base[key], dict) and isinstance(value, dict):
                 self._deep_merge(base[key], value)
@@ -144,36 +140,28 @@ class Config:
         config[keys[-1]] = value
 
     def save(self) -> None:
-        """Save configuration to file."""
+
         self.config_path.parent.mkdir(parents=True, exist_ok=True)
         with open(self.config_path, "w") as f:
             json.dump(self.config, f, indent=2)
 
     def get_all(self) -> Dict[str, Any]:
-        """Get all configuration as nested dictionary.
-        
-        Returns:
-            Dictionary containing all configuration settings
-        """
+
         return self.config.copy()
 
     def reset_all(self) -> None:
-        """Reset configuration to defaults."""
+
         self.config = DEFAULT_CONFIG.copy()
         self.save()
 
     def reset_category(self, category: str) -> None:
-        """Reset a specific category to defaults.
-        
-        Args:
-            category: Category name (e.g., 'capture', 'ocr')
-        """
+
         if category in DEFAULT_CONFIG:
             self.config[category] = DEFAULT_CONFIG[category].copy()
             self.save()
 
     def ensure_directories(self) -> None:
-        """Ensure all required directories exist."""
+
         directories = [
             self.get_data_dir(),
             self.get_frames_dir(),
@@ -191,7 +179,7 @@ _config: Config | None = None
 
 
 def get_config() -> Config:
-    """Get global configuration instance."""
+
     global _config
     if _config is None:
         _config = Config()

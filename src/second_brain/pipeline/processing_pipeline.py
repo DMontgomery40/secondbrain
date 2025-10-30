@@ -20,11 +20,7 @@ class ProcessingPipeline:
     """Pipeline that coordinates capture, OCR, and storage."""
 
     def __init__(self, config: Optional[Config] = None):
-        """Initialize processing pipeline.
-        
-        Args:
-            config: Configuration instance. If None, uses global config.
-        """
+
         self.config = config or Config()
         
         # Initialize components
@@ -68,7 +64,7 @@ class ProcessingPipeline:
         logger.info("processing_pipeline_initialized", batch_size=self.batch_size)
 
     async def _capture_loop(self):
-        """Capture loop that adds frames to OCR queue."""
+
         logger.info("capture_loop_started")
         
         interval = 1.0 / self.capture_service.fps
@@ -102,7 +98,7 @@ class ProcessingPipeline:
         logger.info("capture_loop_stopped")
 
     async def _ocr_loop(self):
-        """OCR processing loop that processes frames from queue."""
+
         logger.info("ocr_loop_started")
         
         while self.running or len(self.ocr_queue) > 0:
@@ -187,7 +183,7 @@ class ProcessingPipeline:
         logger.info("ocr_loop_stopped")
 
     async def start(self):
-        """Start the processing pipeline."""
+
         if self.running:
             logger.warning("pipeline_already_running")
             return
@@ -209,7 +205,7 @@ class ProcessingPipeline:
         logger.info("processing_pipeline_started")
 
     async def stop(self):
-        """Stop the processing pipeline."""
+
         if not self.running:
             logger.warning("pipeline_not_running")
             return
@@ -254,11 +250,7 @@ class ProcessingPipeline:
         )
 
     def get_stats(self) -> Dict[str, Any]:
-        """Get pipeline statistics.
-        
-        Returns:
-            Dictionary with statistics
-        """
+
         return {
             "running": self.running,
             "frames_captured": self.stats["frames_captured"],

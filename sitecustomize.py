@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_huggingface_cached_download() -> None:
-    """Restore deprecated huggingface_hub.cached_download for sentence-transformers."""
+
     try:
         import huggingface_hub
         from huggingface_hub import hf_hub_download  # type: ignore
@@ -28,6 +28,7 @@ def _ensure_huggingface_cached_download() -> None:
         return
 
     def cached_download(  # type: ignore
+
         repo_id: str,
         filename: str,
         *,
@@ -110,10 +111,7 @@ _ensure_huggingface_cached_download()
 
 
 def _disable_third_party_telemetry() -> None:
-    """Disable PostHog/telemetry used by some deps (e.g., Chroma) and quiet tokenizers.
 
-    We prefer privacy and clean logs during CLI/daemon runs.
-    """
     # Common env flags checked by various libs
     os.environ.setdefault("POSTHOG_DISABLED", "1")
     os.environ.setdefault("ANONYMIZED_TELEMETRY", "False")
@@ -131,6 +129,7 @@ def _disable_third_party_telemetry() -> None:
             Posthog = getattr(posthog, "Posthog", None)
             if Posthog is not None:
                 def _noop_capture(self, *args, **kwargs):  # noqa: ANN001
+
                     return None
 
                 try:

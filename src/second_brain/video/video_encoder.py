@@ -58,6 +58,7 @@ class VideoSegment:
     """Represents a video segment (5-minute chunk)."""
     
     def __init__(self, segment_id: str, start_time: datetime, video_path: Path):
+
         self.segment_id = segment_id
         self.start_time = start_time
         self.video_path = video_path
@@ -66,7 +67,7 @@ class VideoSegment:
         self.file_size_bytes = 0
         
     def to_dict(self) -> Dict[str, Any]:
-        """Convert to dictionary for database storage."""
+
         return {
             "segment_id": self.segment_id,
             "start_time": int(self.start_time.timestamp()),
@@ -81,11 +82,7 @@ class H264VideoEncoder:
     """Hardware-accelerated H.264 video encoder for screen captures."""
     
     def __init__(self, config: Optional[Config] = None):
-        """Initialize video encoder.
-        
-        Args:
-            config: Configuration instance
-        """
+
         self.config = config or Config()
         
         # Configuration
@@ -350,11 +347,7 @@ class H264VideoEncoder:
             return None
     
     async def _finalize_segment(self) -> Optional[VideoSegment]:
-        """Finalize the current video segment.
-        
-        Returns:
-            Finalized VideoSegment or None
-        """
+
         if not self.current_segment or not self.current_writer:
             return None
         
@@ -395,6 +388,6 @@ class H264VideoEncoder:
             return None
     
     async def close(self):
-        """Close the encoder and finalize any pending segment."""
+
         if self.current_segment:
             await self._finalize_segment()
