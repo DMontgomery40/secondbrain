@@ -17,46 +17,6 @@ config = Config()
 
 
 def create_app() -> FastAPI:
-    """
-    Construct and configure the FastAPI application for Second Brain.
-
-    ---agentspec
-    what: |
-      Builds a FastAPI app with CORS enabled, mounts the local frames directory
-      as a static route, and registers all HTTP endpoints used by the UI:
-      frame listing/detail, text retrieval, app stats, settings CRUD, system
-      diagnostics, summaries, daily stats, full‑text/semantic search, and Q&A.
-      Returns a fully configured FastAPI instance ready to be served.
-
-    deps:
-      calls:
-        - second_brain.api.server.create_app.get_db()
-        - fastapi.FastAPI
-        - fastapi.middleware.cors.CORSMiddleware
-        - fastapi.staticfiles.StaticFiles
-        - second_brain.config.Config.get_frames_dir()
-      called_by:
-        - Module import (app = create_app())
-      config_files: []
-      environment: []
-
-    why: |
-      Centralizes API wiring in a single factory so tests and the CLI can
-      instantiate the server consistently. Mounting the frames directory lets
-      the UI fetch images without an additional file service.
-
-    guardrails:
-      - DO NOT remove CORS middleware; the local UI relies on cross‑origin
-        access during development.
-      - DO NOT mount frames outside of Config.get_frames_dir(); the UI builds
-        URLs using this path.
-      - DO NOT perform heavy work in this function; endpoint handlers should do
-        IO to keep startup fast.
-
-    changelog:
-      - "2025-10-30: Added agentspec docstring describing server wiring"
-    ---/agentspec
-    """
 
     app = FastAPI(
         title="Second Brain API",
@@ -77,36 +37,6 @@ def create_app() -> FastAPI:
     app.mount("/frames", StaticFiles(directory=str(frames_dir)), name="frames")
 
     def get_db() -> Generator[Database, None, None]:
-        """
-        FastAPI dependency that opens a Database connection and guarantees close.
-
-        ---agentspec
-        what: |
-          Creates a Database using module‑level Config and yields it to request
-          handlers. Ensures db.close() is called via finally to avoid leaks.
-
-        deps:
-          calls:
-            - second_brain.database.Database
-            - second_brain.database.Database.close
-          called_by:
-            - All endpoints using Depends(get_db)
-          config_files: []
-          environment: []
-
-        why: |
-          Keeps connection lifetime scoped to a single request, which is safest
-          for SQLite and aligns with FastAPI dependency patterns.
-
-        guardrails:
-          - DO NOT cache the Database instance globally; SQLite connections are
-            not process‑safe and can cause locking issues.
-          - ALWAYS close the connection in finally.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
-        """
 
         db = Database(config=config)
         try:
@@ -125,38 +55,6 @@ def create_app() -> FastAPI:
         end: Optional[int] = Query(None, description="End timestamp (unix seconds)"),
         db: Database = Depends(get_db),
     ):
-        """
-        List recent frames with optional filters and computed fields.
-
-        ---agentspec
-        what: |
-          Queries frames from the database with optional filtering by
-          app_bundle_id and timestamp range. Computes iso_timestamp (from unix
-          seconds) and screenshot_url for each frame and returns a JSON object
-          with a frames array.
-
-        deps:
-          calls:
-            - Database.get_frames()
-          called_by:
-            - HTTP GET /api/frames
-          config_files: []
-          environment: []
-
-        why: |
-          The UI needs a lightweight list of frames enriched with derived
-          fields. Computing these server‑side keeps client logic simple.
-
-        guardrails:
-          - DO NOT remove the limit constraint; returning unbounded results can
-            exhaust memory.
-          - ALWAYS return iso_timestamp and screenshot_url to keep the UI
-            contract stable.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
-        """
         frames = db.get_frames(
             limit=limit,
             app_bundle_id=app_bundle_id,
@@ -178,31 +76,6 @@ def create_app() -> FastAPI:
 
     @app.get("/api/frames/{frame_id}")
     def get_frame(frame_id: str, db: Database = Depends(get_db)):
-        """
-        Get a single frame by id and enrich with derived fields.
-
-        ---agentspec
-        what: |
-          Fetches one frame by frame_id, returning 404 if not found. Adds
-          iso_timestamp and screenshot_url to the response object.
-
-        deps:
-          calls:
-            - Database.get_frame()
-          called_by:
-            - HTTP GET /api/frames/{frame_id}
-
-        why: |
-          The UI needs per‑frame detail for overlays and preview panels.
-
-        guardrails:
-          - DO NOT change the 404 behavior; the UI distinguishes not‑found from
-            empty content using the status code.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
-        """
 
         frame = db.get_frame(frame_id)
         if not frame:
@@ -213,34 +86,6 @@ def create_app() -> FastAPI:
 
     @app.get("/api/frames/{frame_id}/text")
     def get_frame_text(frame_id: str, db: Database = Depends(get_db)):
-        """
-        Return OCR text blocks associated with a frame.
-
-        ---agentspec
-        what: |
-          Retrieves frame metadata and its OCR text blocks. Returns 404 if the
-          frame does not exist. On unexpected errors, logs a warning and returns
-          an empty blocks list to avoid breaking the UI.
-
-        deps:
-          calls:
-            - Database.get_frame()
-            - Database.get_text_blocks_by_frame()
-          called_by:
-            - HTTP GET /api/frames/{frame_id}/text
-
-        why: |
-          The timeline and detail views require text for search highlighting and
-          summaries. Failing open with empty results keeps the UI resilient.
-
-        guardrails:
-          - DO NOT convert unexpected failures to 500 if the database connection
-            is transient; prefer empty response to keep UX responsive.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
-        """
 
         try:
             frame = db.get_frame(frame_id)
@@ -293,36 +138,6 @@ def create_app() -> FastAPI:
 
     @app.post("/api/settings/update")
     def update_settings(settings: dict):
-        """
-        Validate and persist user‑configurable settings.
-
-        ---agentspec
-        what: |
-          Validates payload structure and known fields (OCR engine options,
-          recognition level, numeric constraints). Accumulates field‑level
-          validation errors and returns 422 on failure. On success, writes values
-          to Config and saves to disk.
-
-        deps:
-          calls:
-            - Config.set()
-            - Config.save()
-          called_by:
-            - HTTP POST /api/settings/update
-
-        why: |
-          Centralizes settings validation and persistence to keep the UI thin
-          and to guard against invalid combinations.
-
-        guardrails:
-          - DO NOT relax validation without updating the UI; clients rely on the
-            422 structure for inline field errors.
-          - ALWAYS persist using Config.save() after mutations.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
-        """
 
         if not isinstance(settings, dict):
             raise HTTPException(status_code=400, detail="Invalid payload")
@@ -401,34 +216,6 @@ def create_app() -> FastAPI:
 
     @app.get("/api/settings/stats")
     def get_system_stats(db: Database = Depends(get_db)):
-        """
-        Report database and host system metrics used by the settings UI.
-
-        ---agentspec
-        what: |
-          Returns database size, screenshot storage usage, frame/text counts,
-          memory utilization, disk free space and whether the DeepSeek MLX
-          dependency is importable. Uses psutil for host metrics.
-
-        deps:
-          calls:
-            - psutil.virtual_memory
-            - psutil.disk_usage
-            - Database.get_database_stats
-          called_by:
-            - HTTP GET /api/settings/stats
-
-        why: |
-          Gives users feedback on storage and performance to tune capture and
-          retention settings.
-
-        guardrails:
-          - DO NOT import heavy ML packages here; only test importability.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
-        """
 
         import psutil
         import importlib
@@ -504,34 +291,7 @@ def create_app() -> FastAPI:
         ),
         db: Database = Depends(get_db),
     ):
-        """
-        Return AI‑generated summaries for a date, latest type, or recent window.
-
-        ---agentspec
-        what: |
-          If a date (YYYY‑MM‑DD) is provided, returns that day’s summaries.
-          If summary_type is provided, returns the latest summary of that type.
-          Otherwise returns summaries from the past 7 days ordered by start time.
-
-        deps:
-          calls:
-            - Database.get_summaries_for_day
-            - Database.get_latest_summary
-          called_by:
-            - HTTP GET /api/summaries
-
-        why: |
-          The UI needs fast access to aggregated insights while browsing the
-          timeline without running generation work on demand.
-
-        guardrails:
-          - DO NOT change the accepted date format; the UI sends YYYY‑MM‑DD.
-          - DO NOT return 500 on bad dates; return 400 with helpful message.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
-        """
+        """Get AI-generated summaries for a date or type."""
         if date:
             from datetime import datetime as dt
 
@@ -589,33 +349,6 @@ def create_app() -> FastAPI:
         date: str = Query(..., description="Date in YYYY-MM-DD format"),
         db: Database = Depends(get_db),
     ):
-        """
-        Compute daily frame/text/app counts for the dashboard.
-
-        ---agentspec
-        what: |
-          Calculates a day’s start/end unix timestamps and aggregates counts via
-          SQL queries: frames captured, OCR text blocks, total characters, and
-          distinct applications used.
-
-        deps:
-          calls:
-            - sqlite3 connection (db.conn.execute)
-          called_by:
-            - HTTP GET /api/stats/daily
-
-        why: |
-          Provides a compact statistical summary used by the top of the page and
-          empty‑state logic.
-
-        guardrails:
-          - DO NOT change returned keys (frame_count, text_block_count,
-            total_characters, app_count) without updating UI rendering.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
-        """
         """Get daily statistics for frames, text blocks, and apps."""
         from datetime import datetime as dt
 
@@ -676,36 +409,9 @@ def create_app() -> FastAPI:
         payload: dict = Body(...),
         db: Database = Depends(get_db),
     ):
-        """
-        Search text blocks via FTS or semantic embeddings.
-
-        ---agentspec
-        what: |
-          Validates input then executes either FTS search in SQLite or semantic
-          vector search via EmbeddingService (optional reranking). Returns a
-          normalized list of hits including frame metadata, text, and method.
-
-        deps:
-          calls:
-            - Database.search_text
-            - Database.get_frame
-            - Database.get_text_block
-            - second_brain.embeddings.EmbeddingService.search
-          called_by:
-            - HTTP POST /api/search
-
-        why: |
-          FTS is fast and local; semantic search is optional and used when
-          higher‑level meaning is desired.
-
-        guardrails:
-          - DO NOT expose the embedding client globally; import lazily to keep
-            API startup fast.
-          - DO NOT return unbounded results; always honor limit.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
+        """Search text blocks (FTS) or semantic embeddings.
+        payload keys: query (str), limit (int), app_bundle_id (str|None), semantic (bool), reranker (bool),
+                      start (int|None), end (int|None)
         """
         query: str = payload.get("query", "").strip()
         if not query:
@@ -784,36 +490,9 @@ def create_app() -> FastAPI:
         payload: dict = Body(...),
         db: Database = Depends(get_db),
     ):
-        """
-        Generate an AI answer based on search results.
-
-        ---agentspec
-        what: |
-          Executes the same search pipeline as /api/search and then calls the
-          OpenAI Responses API server‑side to synthesize an answer from relevant
-          OCR text. Sanitizes context and applies a retry with condensed text.
-
-        deps:
-          calls:
-            - second_brain.api.server.search
-            - openai.OpenAI.responses.create
-          called_by:
-            - HTTP POST /api/ask
-          environment:
-            - OPENAI_API_KEY: required (server‑side only)
-
-        why: |
-          Keeps credentials on the server and provides a single endpoint for the
-          UI to request synthesized answers.
-
-        guardrails:
-          - DO NOT leak the API key to the client; calls must remain server‑side.
-          - DO NOT block on very large contexts; cap the number and length of
-            items to keep latency predictable.
-
-        changelog:
-          - "2025-10-30: Added agentspec docstring"
-        ---/agentspec
+        """Generate an AI answer from search results.
+        payload keys: query (str), limit (int), app_bundle_id (str|None), semantic (bool), reranker (bool),
+                      start (int|None), end (int|None)
         """
         query: str = payload.get("query", "").strip()
         if not query:

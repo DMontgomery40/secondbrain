@@ -1,7 +1,7 @@
 """Streamlit UI for Second Brain - Daily summaries and visual timeline."""
 
 import streamlit as st
-from datetime import datetime, time, timedelta
+from datetime import datetime, time
 from pathlib import Path
 import sqlite3
 from typing import List, Dict, Any, Optional
@@ -731,6 +731,7 @@ class SecondBrainUI:
             )
 
             # Calculate timestamps based on preset
+            from datetime import datetime, timedelta
             query_start_timestamp = None
             query_end_timestamp = None
 
